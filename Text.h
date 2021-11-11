@@ -2,6 +2,7 @@
 #define AUTO_BUG_TEXT_H
 
 #include <string>
+#include <functional>
 
 #include "DimMap.h"
 
@@ -12,7 +13,7 @@ class Text
 {
 public:
     ~Text() noexcept;
-    Text() noexcept;
+    Text(int dims=0) noexcept;
     Text(const Text& src) noexcept;
 
     /*******************************************
@@ -22,10 +23,34 @@ public:
     int dims() const noexcept;
 
     /*******************************************
+     * @brief 设置超空间总维数
+     * @param[in] dims 超空间的总维数
+     * ****************************************/
+    void setDims(int dims) noexcept;
+
+    /*******************************************
      * @brief 获取UTF8解码后的文本
      * @return 解码后的文本
      * ****************************************/
     std::wstring text() const noexcept;
+
+    /*******************************************
+     * @brief 将坐标设为0
+     * ****************************************/
+    void zero() noexcept;
+
+    /*******************************************
+     * @brief 对所有维度的坐标执行一次相同的操作,并修
+     *        改为返回值
+     * @param[in] fn 要进行的操作
+     * ****************************************/
+    void map(std::function<float(float)> fn) noexcept;
+
+    /*******************************************
+     * @brief 对坐标向量进行一次标量加法运算
+     * @param[in] src 要加的另一个样本
+     * ****************************************/
+    void add(const Text& src);
 
     /*******************************************
      * @brief 设置文本,采用UTF8解码,扫描并设置超空间坐标
@@ -67,6 +92,13 @@ public:
      * @return 该维度上的坐标
      * ****************************************/
     const float& operator [] (int dim) const; 
+
+    /*******************************************
+     * @brief 赋值
+     * @param[in] src 源对象
+     * @return 赋值后的当前对象
+     * ****************************************/
+    Text& operator = (const Text& src) noexcept;
 
 
 private:
