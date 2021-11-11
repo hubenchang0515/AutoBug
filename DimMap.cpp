@@ -17,13 +17,13 @@ static const char* chars2 = u8"匕刁丐邓冗仑讥夭歹戈乍冯卢凹凸艾�
  * @brief 获取一个全局公共实例
  * @return 对象实例
  * ****************************************/
-DimMap& instance()
+DimMap& DimMap::instance() noexcept
 {
     static DimMap dimMap;
     return dimMap;
 }
 
-DimMap::DimMap()
+DimMap::DimMap() noexcept
 {
     /* 构建汉字和超空间维度的映射关系 */
     int dim = 0;
@@ -49,11 +49,12 @@ DimMap::DimMap()
  * @param ch 输入的汉字
  * @return 对应的维度,如果未收录该汉字则返回-1
  * ****************************************/
-int DimMap::dim(wchar_t ch)
+int DimMap::dim(wchar_t ch) const noexcept
 {
-    if (m_dimMap.find(ch) == m_dimMap.end())
+    auto iter = m_dimMap.find(ch);
+    if (iter == m_dimMap.end())
         return -1;
-    return m_dimMap[ch];
+    return iter->second;
 }
 
 /*******************************************
@@ -61,18 +62,19 @@ int DimMap::dim(wchar_t ch)
  * @param ch 输入的维度
  * @return 对应的汉字
  * ****************************************/
-wchar_t DimMap::word(int dim)
+wchar_t DimMap::word(int dim) const noexcept
 {
-    if (m_wordMap.find(dim) == m_wordMap.end())
+    auto iter = m_wordMap.find(dim);
+    if (iter == m_wordMap.end())
         return L'\0';
-    return m_wordMap[dim];
+    return iter->second;
 }
 
 /*******************************************
  * @brief 获取超空间总维数
  * @return 超空间总维数
  * ****************************************/
-int DimMap::dims()
+int DimMap::dims() const noexcept
 {
     return m_dimMap.size();
 }

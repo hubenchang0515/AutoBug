@@ -4,6 +4,7 @@
 
 #include <string>
 #include <locale>
+#include <stdexcept>
 #include <codecvt>
 
 #include "Text.h"
@@ -12,7 +13,7 @@
 namespace AutoBug
 {
 
-Text::~Text()
+Text::~Text() noexcept
 {
     if (m_pos == nullptr)
         return;
@@ -23,7 +24,7 @@ Text::~Text()
     m_text = L"";
 }
 
-Text::Text():
+Text::Text() noexcept :
     m_dims(0),
     m_pos(nullptr),
     m_text(L"")
@@ -31,11 +32,19 @@ Text::Text():
 
 }
 
+Text::Text(const Text& src) noexcept :
+    m_dims(src.m_dims),
+    m_pos(new float[m_dims]),
+    m_text(src.m_text)
+{
+    memcpy(m_pos, src.m_pos, sizeof(float) * m_dims);
+}
+
 /*******************************************
  * @brief 获取超空间总维数
  * @return 超空间的总维数
  * ****************************************/
-int Text::dims()
+int Text::dims() const noexcept
 {
     return m_dims;
 }
@@ -44,7 +53,7 @@ int Text::dims()
  * @brief 获取UTF8解码后的文本
  * @return 解码后的文本
  * ****************************************/
-std::wstring Text::text()
+std::wstring Text::text() const noexcept
 {
     return m_text;
 }
@@ -54,14 +63,14 @@ std::wstring Text::text()
  * @param[in] text 文本原始数据
  * @param[in] dimMap 超空间维度映射
  * ****************************************/
-void Text::setText(const char* text, DimMap& dimMap)
+void Text::setText(const char* text, const DimMap& dimMap) noexcept
 {
     if (m_pos != nullptr)
         delete[] m_pos;
 
     m_dims = dimMap.dims();
-    m_pos = new int[m_dims];
-    memset(static_cast<void*>(m_pos), 0, sizeof(int) * m_dims);
+    m_pos = new float[m_dims];
+    memset(static_cast<void*>(m_pos), 0, sizeof(float) * m_dims);
 
     m_text = std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(text);
     for (wchar_t ch : m_text)
@@ -73,10 +82,20 @@ void Text::setText(const char* text, DimMap& dimMap)
 }
 
 /*******************************************
+ * @brief 设置文本,采用UTF8解码,扫描并设置超空间坐标
+ * @param[in] text 文本原始数据
+ * @param[in] dimMap 超空间维度映射
+ * ****************************************/
+void Text::setText(const std::string& text, const DimMap& dimMap) noexcept
+{
+    setText(text.c_str(), dimMap);
+}
+
+/*******************************************
  * @brief 打印超空间坐标
  * @param[in] dimMap 超空间维度映射
  * ****************************************/
-void Text::print(DimMap& dimMap)
+void Text::print(const DimMap& dimMap) const noexcept
 {
     static wchar_t str[2] = {0, 0};
     for (int i = 0; i < m_dims; i++)
@@ -85,7 +104,7 @@ void Text::print(DimMap& dimMap)
             continue;
 
         str[0] = dimMap.word(i);
-        printf("%ls: %d\n", str, m_pos[i]);
+        printf("%ls: %f\n", str, m_pos[i]);
     }
 }
 
@@ -94,18 +113,42 @@ void Text::print(DimMap& dimMap)
  * @param[in] text 另一个文本
  * @return 两个文本之间的欧氏距离
  * ****************************************/
-double Text::distance(Text& text)
+float Text::distance(const Text& text) const noexcept
 {
     if (m_dims != text.dims())
         return -1;
 
-    double sum = 0.0;
+    float sum = 0.0;
     for (int i = 0; i < m_dims; i++)
     {
-        sum += pow(m_pos[i] - text.m_pos[i], 2);
+        sum += std::pow(m_pos[i] - text.m_pos[i], 2);
     }
 
-    return pow(sum, 0.5);
+    return std::sqrt(sum);
+}
+
+/*******************************************
+ * @brief 索引一个维度的坐标
+ * @param[in] dim 维度
+ * @return 该维度上的坐标
+ * ****************************************/
+float& Text::operator [] (int dim)
+{
+    if (dim >= m_dims)
+        throw std::out_of_range("oversize dim");
+    return m_pos[dim];
+}
+
+/*******************************************
+ * @brief 索引一个维度的坐标
+ * @param[in] dim 维度
+ * @return 该维度上的坐标
+ * ****************************************/
+const float& Text::operator [] (int dim) const
+{
+    if (dim >= m_dims)
+        throw std::out_of_range("oversize dim");
+    return m_pos[dim];
 }
 
 }; // namespace AutoBug
