@@ -15,6 +15,7 @@ public:
     ~Text() noexcept;
     Text(int dims=0) noexcept;
     Text(const Text& src) noexcept;
+    Text(Text&& src) noexcept;
 
     /*******************************************
      * @brief 获取超空间总维数
@@ -35,9 +36,16 @@ public:
     std::wstring text() const noexcept;
 
     /*******************************************
-     * @brief 将坐标设为0
+     * @brief 充填所有维度的坐标
+     * @param[in] n 充填的值
      * ****************************************/
-    void zero() noexcept;
+    void fill(float n) noexcept;
+
+    /*******************************************
+     * @brief 所有维度的坐标进行乘方运算
+     * @param[in] n 幂指数
+     * ****************************************/
+    Text pow(int n) noexcept;
 
     /*******************************************
      * @brief 对所有维度的坐标执行一次相同的操作,并修
@@ -47,10 +55,12 @@ public:
     void map(std::function<float(float)> fn) noexcept;
 
     /*******************************************
-     * @brief 对坐标向量进行一次标量加法运算
-     * @param[in] src 要加的另一个样本
+     * @brief 对坐标向量进行一次标量运算
+     * @param[in] obj 参与的另一个样本
+     * @param[in] fn 进行运算的函数
+     * @return 运算结果
      * ****************************************/
-    void add(const Text& src);
+    Text scalar(const Text& obj, std::function<float(float, float)> fn) const noexcept;
 
     /*******************************************
      * @brief 设置文本,采用UTF8解码,扫描并设置超空间坐标
@@ -94,11 +104,46 @@ public:
     const float& operator [] (int dim) const; 
 
     /*******************************************
-     * @brief 赋值
+     * @brief 拷贝赋值
      * @param[in] src 源对象
      * @return 赋值后的当前对象
      * ****************************************/
     Text& operator = (const Text& src) noexcept;
+
+    /*******************************************
+     * @brief 移动赋值
+     * @param[in] src 源对象
+     * @return 赋值后的当前对象
+     * ****************************************/
+    Text& operator = (Text&& src) noexcept;
+
+    /*******************************************
+     * @brief 标量加法运算
+     * @param[in] obj 参与运算的另一个对象
+     * @return 运算结果
+     * ****************************************/
+    Text operator + (const Text& src) const;
+
+    /*******************************************
+     * @brief 标量减法运算
+     * @param[in] obj 参与运算的另一个对象
+     * @return 运算结果
+     * ****************************************/
+    Text operator - (const Text& src) const;
+
+    /*******************************************
+     * @brief 标量乘法运算
+     * @param[in] obj 参与运算的另一个对象
+     * @return 运算结果
+     * ****************************************/
+    Text operator * (const Text& src) const;
+
+    /*******************************************
+     * @brief 标量除法运算
+     * @param[in] obj 参与运算的另一个对象
+     * @return 运算结果
+     * ****************************************/
+    Text operator / (const Text& src) const;
 
 
 private:

@@ -38,9 +38,11 @@ void Kmeans::setGroupCount(size_t k) noexcept
 }
 
 /*******************************************
- * @brief 开始进行学习
- * ****************************************/
-void Kmeans::learn() noexcept
+     * @brief 进行学习,中心点的移动距离小于偏移阈值时
+     *        学习结束
+     * @param[in] threshold 偏移阈值
+     * ****************************************/
+void Kmeans::learn(float threshold) noexcept
 {
     int dims = m_dataset[0].dims();
 
@@ -82,9 +84,10 @@ void Kmeans::learn() noexcept
         for (size_t group = 0; group < m_k; group++)
         {
             Text newCenter{dims};
+            newCenter.fill(0.0f);
             for (size_t i = 0; i < m_groups[group].size(); i++)
             {
-                newCenter.add(m_groups[group][i]);
+                newCenter = newCenter + m_groups[group][i];
             }
             newCenter.map([this, group](float n) -> float {return n/m_groups[group].size();});
 
@@ -98,8 +101,7 @@ void Kmeans::learn() noexcept
         }
 
         // 中心点位置稳定,结束学习
-        printf("MaxDelta: %f\n", maxDelta);
-        if (maxDelta < 0.1)
+        if (maxDelta < threshold)
             break;
     }
 }

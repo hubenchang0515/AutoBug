@@ -27,9 +27,11 @@ public:
     void setGroupCount(size_t k) noexcept;
 
     /*******************************************
-     * @brief 进行学习
+     * @brief 进行学习,中心点的移动距离小于偏移阈值时
+     *        学习结束
+     * @param[in] threshold 偏移阈值
      * ****************************************/
-    void learn() noexcept;
+    void learn(float threshold) noexcept;
 
     /*******************************************
      * @brief 打印学习后的各个分组

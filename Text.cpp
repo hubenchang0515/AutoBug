@@ -9,6 +9,7 @@
 
 #include "Text.h"
 #include "DimMap.h"
+#include "Accelerator.h"
 
 namespace AutoBug
 {
@@ -29,10 +30,7 @@ Text::Text(int dims) noexcept :
     m_pos(dims == 0 ? nullptr : new float[dims]),
     m_text(L"")
 {
-    if (m_pos != nullptr && m_dims != 0)
-    {
-        zero();
-    }
+
 }
 
 Text::Text(const Text& src) noexcept :
@@ -41,6 +39,16 @@ Text::Text(const Text& src) noexcept :
     m_text(src.m_text)
 {
     memcpy(m_pos, src.m_pos, sizeof(float) * m_dims);
+}
+
+Text::Text(Text&& src) noexcept :
+    m_dims(src.m_dims),
+    m_pos(src.m_pos),
+    m_text(src.m_text)
+{
+    src.m_dims = 0;
+    src.m_pos = nullptr;
+    src.m_text = L"";
 }
 
 /*******************************************
@@ -75,11 +83,29 @@ std::wstring Text::text() const noexcept
 }
 
 /*******************************************
- * @brief 将坐标设为0
+ * @brief 充填所有维度的坐标
+ * @param[in] n 充填的值
  * ****************************************/
-void Text::zero() noexcept
+void Text::fill(float n) noexcept
 {
-    memset(m_pos, 0, sizeof(float) * m_dims);
+    for (int i = 0; i < m_dims; i++)
+    {
+        m_pos[i] = n;
+    }
+}
+
+/*******************************************
+ * @brief 所有维度的坐标进行乘方运算
+ * @param[in] n 幂指数
+ * ****************************************/
+Text Text::pow(int n) noexcept
+{
+    Text result{m_dims};
+    for (int i = 0; i < m_dims; i++)
+    {
+        result[i] = std::pow(m_pos[i], n);
+    }
+    return result;
 }
 
 /*******************************************
@@ -96,18 +122,20 @@ void Text::map(std::function<float(float)> fn) noexcept
 }
 
 /*******************************************
- * @brief 对坐标向量进行一次标量加法运算
- * @param[in] src 要加的另一个样本
+ * @brief 对坐标向量进行一次标量运算
+ * @param[in] obj 参与的另一个样本
+ * @param[in] fn 进行运算的函数
+ * @return 运算结果
  * ****************************************/
-void Text::add(const Text& src)
+Text Text::scalar(const Text& obj, std::function<float(float, float)> fn) const noexcept
 {
-    if (m_dims != src.m_dims)
-        throw std::runtime_error("Text add with diff dims");
-
+    Text result{m_dims};
     for (int i = 0; i < m_dims; i++)
     {
-        m_pos[i] += src.m_pos[i];
+        result.m_pos[i] = fn(m_pos[i], obj.m_pos[i]);
     }
+
+    return result;
 }
 
 /*******************************************
@@ -170,10 +198,13 @@ float Text::distance(const Text& text) const noexcept
     if (m_dims != text.dims())
         return -1;
 
+    Text diff = *this - text;
+    diff = diff * diff;
+
     float sum = 0.0;
     for (int i = 0; i < m_dims; i++)
     {
-        sum += std::pow(m_pos[i] - text.m_pos[i], 2);
+        sum += diff[i];
     }
 
     return std::sqrt(sum);
@@ -187,7 +218,8 @@ float Text::distance(const Text& text) const noexcept
 float& Text::operator [] (int dim)
 {
     if (dim >= m_dims)
-        throw std::out_of_range("oversize dim");
+        throw std::out_of_range("dimension oversize");
+
     return m_pos[dim];
 }
 
@@ -199,22 +231,121 @@ float& Text::operator [] (int dim)
 const float& Text::operator [] (int dim) const
 {
     if (dim >= m_dims)
-        throw std::out_of_range("oversize dim");
+        throw std::out_of_range("dimension oversize");
+
     return m_pos[dim];
 }
 
 /*******************************************
- * @brief 赋值
+ * @brief 拷贝赋值
  * @param[in] src 源对象
  * @return 赋值后的当前对象
  * ****************************************/
 Text& Text::operator = (const Text& src) noexcept
 {
     m_dims = src.m_dims;
-     m_pos = new float[m_dims];
+    m_pos = new float[m_dims];
     m_text = src.m_text;
     memcpy(m_pos, src.m_pos, sizeof(float) * m_dims);
     return *this;
+}
+
+/*******************************************
+ * @brief 移动赋值
+ * @param[in] src 源对象
+ * @return 赋值后的当前对象
+ * ****************************************/
+Text& Text::operator = (Text&& src) noexcept
+{
+    m_dims = src.m_dims;
+    m_pos = src.m_pos;
+    m_text = src.m_text;
+
+    src.m_dims = 0;
+    src.m_pos = nullptr;
+    src.m_text = L"";
+
+    return *this;
+}
+
+/*******************************************
+ * @brief 标量加法运算
+ * @param[in] obj 参与运算的另一个对象
+ * @return 运算结果
+ * ****************************************/
+Text Text::operator + (const Text& obj) const
+{
+    if (m_dims != obj.m_dims)
+        throw std::runtime_error("different dimensions");
+
+    if (Accelerator::instance().available())
+    {
+        Text result{m_dims};
+        Accelerator::instance().add(m_pos, obj.m_pos, m_dims, result.m_pos);
+        return result;
+    }
+
+    return scalar(obj, [](float x, float y) -> float {return x+y;});
+}
+
+/*******************************************
+ * @brief 标量减法运算
+ * @param[in] obj 参与运算的另一个对象
+ * @return 运算结果
+ * ****************************************/
+Text Text::operator - (const Text& obj) const
+{
+    if (m_dims != obj.m_dims)
+        throw std::runtime_error("different dimensions");
+
+    if (Accelerator::instance().available())
+    {
+        Text result{m_dims};
+        Accelerator::instance().sub(m_pos, obj.m_pos, m_dims, result.m_pos);
+        return result;
+    }
+
+    return scalar(obj, [](float x, float y) -> float {return x-y;});
+}
+
+/*******************************************
+ * @brief 标量乘法运算
+ * @param[in] obj 参与运算的另一个对象
+ * @return 运算结果
+ * ****************************************/
+Text Text::operator * (const Text& obj) const
+{
+    if (m_dims != obj.m_dims)
+        throw std::runtime_error("different dimensions");
+
+    if (Accelerator::instance().available())
+    {
+        Text result{m_dims};
+        Accelerator::instance().mul(m_pos, obj.m_pos, m_dims, result.m_pos);
+        return result;
+    }
+
+    return scalar(obj, [](float x, float y) -> float {return x*y;});
+}
+
+/*******************************************
+ * @brief 标量除法运算
+ * @param[in] obj 参与运算的另一个对象
+ * @return 运算结果
+ * ****************************************/
+Text Text::operator / (const Text& obj) const
+{
+    if (m_dims != obj.m_dims)
+        throw std::runtime_error("different dimensions");
+
+    if (Accelerator::instance().available())
+    {
+        Text result{m_dims};
+        Accelerator::instance().div(m_pos, obj.m_pos, m_dims, result.m_pos);
+        return result;
+    }
+
+    return scalar(obj, [](float x, float y) -> float {return x/y;});
 }
 
 }; // namespace AutoBug

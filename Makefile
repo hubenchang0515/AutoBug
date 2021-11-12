@@ -3,15 +3,20 @@ LIBS := -lOpenCL
 CXXFLAGS := -W -Wall -Wextra -Werror -O3 -std=c++11
 
 PREFIX := /usr/local
-
-SRCS := $(wildcard *.cpp)
-HEADERS := $(wildcard *.h)
-OBJS := $(patsubst %.cpp,%.o,$(SRCS))
 INSTALL_PATH := $(DESTDIR)$(PREFIX)
 
-.PHONY: all clean install uninstall print
+SRCS := $(wildcard *.cpp) Accelerator.cpp
+HEADERS := $(wildcard *.h)
+OBJS := $(patsubst %.cpp,%.o,$(SRCS))
 
-all: $(TARGET)
+.PHONY: prepare all clean install uninstall print profile
+
+all: $(TARGET) prepare
+
+profile: $(SRCS)
+	$(CXX) -o $(TARGET) $^ $(LIBS) -g -pg
+	./$(TARGET)
+	gprof ./$(TARGET) gmon.out -p > profile.txt
 
 install: all
 	install -m0644 $(TARGET) $(INSTALL_PATH)/bin
@@ -19,11 +24,14 @@ install: all
 uninstall:
 	$(RM) $(INSTALL_PATH)/bin/$(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) 
 	$(CXX) -o $@ $^ $(LIBS)
 
+Accelerator.cpp: Accelerator.cxx kernel.cl prepare.sh
+	bash -c ./prepare.sh
+
 clean:
-	$(RM) $(OBJS)
+	$(RM) $(OBJS) Accelerator.cpp
 
 print:
 	@echo "DESTDIR : $(DESTDIR)"
