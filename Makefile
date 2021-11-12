@@ -14,9 +14,9 @@ OBJS := $(patsubst %.cpp,%.o,$(SRCS))
 all: $(TARGET) prepare
 
 profile: $(SRCS)
-	$(CXX) -o $(TARGET) $^ $(LIBS) -g -pg
+	$(CXX) -o $(TARGET) $^ $(LIBS) -g -pg $(CXXFLAGS)
 	./$(TARGET)
-	gprof ./$(TARGET) gmon.out -p > profile.txt
+	gprof ./$(TARGET) gmon.out > profile.txt
 
 install: all
 	install -m0644 $(TARGET) $(INSTALL_PATH)/bin

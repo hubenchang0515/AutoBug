@@ -30,7 +30,7 @@ Text::Text(int dims) noexcept :
     m_pos(dims == 0 ? nullptr : new float[dims]),
     m_text(L"")
 {
-
+    memset(m_pos, 0, sizeof(float) *m_dims);
 }
 
 Text::Text(const Text& src) noexcept :

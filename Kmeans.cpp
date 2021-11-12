@@ -84,7 +84,6 @@ void Kmeans::learn(float threshold) noexcept
         for (size_t group = 0; group < m_k; group++)
         {
             Text newCenter{dims};
-            newCenter.fill(0.0f);
             for (size_t i = 0; i < m_groups[group].size(); i++)
             {
                 newCenter = newCenter + m_groups[group][i];

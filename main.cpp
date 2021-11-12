@@ -10,7 +10,6 @@ using namespace AutoBug;
 int main()
 {
     setlocale(LC_ALL, "");
-    // Accelerator::instance().setEnable(false);
     if (Accelerator::instance().available())
     {
         printf("Use GPU: %s\n", Accelerator::instance().deviceName().c_str());
