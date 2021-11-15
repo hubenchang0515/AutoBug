@@ -12,7 +12,7 @@ int main()
     setlocale(LC_ALL, "");
     if (Accelerator::instance().available())
     {
-        printf("Use GPU: %s\n", Accelerator::instance().deviceName().c_str());
+        printf("Use GPU: %s\n", Accelerator::instance().name().c_str());
         printf("Work Size: %zu\n", Accelerator::instance().workSize());
     }
     auto dataset = DataLoader::load("train.txt", DimMap::instance());

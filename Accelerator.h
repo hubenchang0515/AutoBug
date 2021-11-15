@@ -39,7 +39,7 @@ public:
      * @brief 获取设备名称
      * @return 设备名
      * ****************************************/
-    std::string deviceName() const noexcept;
+    std::string name() const noexcept;
 
     /*******************************************
      * @brief 获取一组任务的工作数量
@@ -102,6 +102,7 @@ private:
     static const char* source;
 
     bool m_enable;
+
     cl_platform_id m_pid;
     cl_device_id m_did;
     cl_context m_ctx;
@@ -111,6 +112,8 @@ private:
     cl_kernel m_sub;
     cl_kernel m_mul;
     cl_kernel m_div;
+
+    std::string m_name;
     size_t m_localWorkSize;
 };
 

@@ -45,21 +45,22 @@ std::vector<Text> DataLoader::load(const char* file, const DimMap& dimMap) noexc
 std::string DataLoader::readline(FILE* fp) noexcept
 {
     #ifndef BUFFER_SIZE
-    #define BUFFER_SIZE 8
+    #define BUFFER_SIZE 256
 
     std::string line;
     char buffer[BUFFER_SIZE];
 
-    while(true)
+    while(fgets(buffer, BUFFER_SIZE, fp) != nullptr)
     {
-        fgets(buffer, BUFFER_SIZE, fp);
         line += buffer;
         int len = strlen(buffer);
-        if (feof(fp) || len == 0 || buffer[len-1] == '\n' || buffer[len-1] == '\r')
+        if (buffer[len-1] == '\n' || buffer[len-1] == '\r')
         {
-            return trimSpace(line);
+            break;
         }
     }
+
+    return trimSpace(line);
 
     #undef BUFFER_SIZE
     #endif // BUFFER_SIZE

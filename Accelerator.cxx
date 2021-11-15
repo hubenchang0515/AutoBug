@@ -16,6 +16,10 @@ Accelerator& Accelerator::instance() noexcept
 Accelerator::~Accelerator() noexcept
 {
     clFinish(m_cmd);
+    clReleaseKernel(m_add);
+    clReleaseKernel(m_sub);
+    clReleaseKernel(m_mul);
+    clReleaseKernel(m_div);
     clReleaseProgram(m_program);
     clReleaseCommandQueue(m_cmd);
     clReleaseContext(m_ctx);
@@ -33,6 +37,7 @@ Accelerator::Accelerator() noexcept :
     m_sub(nullptr),
     m_mul(nullptr),
     m_div(nullptr),
+    m_name(""),
     m_localWorkSize(64)
 {
     // 获取平台
@@ -95,6 +100,21 @@ Accelerator::Accelerator() noexcept :
     m_mul = clCreateKernel(m_program, "mul", nullptr);
     m_div = clCreateKernel(m_program, "div", nullptr);
 
+    // 读取设备名称
+    size_t n = 0;
+    state = clGetDeviceInfo(m_did, CL_DEVICE_NAME, 0, nullptr, &n);
+    if (state != CL_SUCCESS || n == 0)
+    {
+        m_name = "Unknown";
+    }
+    else
+    {
+        char* buffer = new char[n];
+        clGetDeviceInfo(m_did, CL_DEVICE_NAME, n, buffer, nullptr);
+        m_name = buffer;
+        delete[] buffer;
+    }
+
     // 读取设备一组任务的最大工作数量
     state = clGetDeviceInfo(m_did, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &m_localWorkSize, nullptr);
     if (state != CL_SUCCESS)
@@ -131,22 +151,12 @@ bool Accelerator::available() const noexcept
 }
 
 /*******************************************
- * @brief 获取设备名称
- * @return 设备名
+ * @brief 获取加速器的名称(即显卡名称)
+ * @return 名称
  * ****************************************/
-std::string Accelerator::deviceName() const noexcept
+std::string Accelerator::name() const noexcept
 {
-    static std::string name;
-    if (name.empty())
-    {
-        size_t n = 0;
-        clGetDeviceInfo(m_did, CL_DEVICE_NAME, 0, nullptr, &n);
-        char* buffer = new char[n];
-        clGetDeviceInfo(m_did, CL_DEVICE_NAME, n, buffer, nullptr);
-        name = buffer;
-        delete[] buffer;
-    }
-    return name;
+    return m_name;
 }
 
 /*******************************************
@@ -177,9 +187,10 @@ bool Accelerator::scalar(const float* v1, const float* v2, size_t n, cl_kernel k
 
     // 一组任务的数量
     size_t localSize = m_localWorkSize <= n ? m_localWorkSize : n;
+    size_t globalSize = m_localWorkSize * ((n - 1 + m_localWorkSize)/ m_localWorkSize);
 
     // 分配显存
-    m1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, n * sizeof(float), nullptr, &state);
+    m1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
     if (state != CL_SUCCESS || m1 == nullptr)
     {
         fprintf(stderr, "failed to create buffer\n");
@@ -187,7 +198,7 @@ bool Accelerator::scalar(const float* v1, const float* v2, size_t n, cl_kernel k
         goto EXIT;
     }
 
-    m2 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, n * sizeof(float), nullptr, &state);
+    m2 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
     if (state != CL_SUCCESS || m2 == nullptr)
     {
         fprintf(stderr, "failed to create buffer\n");
@@ -246,7 +257,7 @@ bool Accelerator::scalar(const float* v1, const float* v2, size_t n, cl_kernel k
     }
 
     // 调用核函数
-    state = clEnqueueNDRangeKernel(m_cmd, kernel, 1, nullptr, &n, &localSize, 0, nullptr, nullptr);
+    state = clEnqueueNDRangeKernel(m_cmd, kernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
     if (state != CL_SUCCESS || m2 == nullptr)
     {
         fprintf(stderr, "failed to invoke kernel\n");
