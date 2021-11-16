@@ -16,10 +16,9 @@ namespace AutoBug
 
 Text::~Text() noexcept
 {
-    if (m_pos == nullptr)
-        return;
+    if (m_pos != nullptr)
+        delete[] m_pos;
 
-    delete[] m_pos;
     m_dims = 0;
     m_pos = nullptr;
     m_text = L"";
@@ -250,6 +249,9 @@ const float& Text::operator [] (int dim) const
  * ****************************************/
 Text& Text::operator = (const Text& src) noexcept
 {
+    if (m_pos != nullptr)
+        delete[] m_pos;
+
     m_dims = src.m_dims;
     m_pos = new float[m_dims];
     m_text = src.m_text;
@@ -264,6 +266,9 @@ Text& Text::operator = (const Text& src) noexcept
  * ****************************************/
 Text& Text::operator = (Text&& src) noexcept
 {
+    if (m_pos != nullptr)
+        delete[] m_pos;
+
     m_dims = src.m_dims;
     m_pos = src.m_pos;
     m_text = src.m_text;
