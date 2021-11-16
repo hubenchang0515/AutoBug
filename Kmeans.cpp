@@ -130,6 +130,16 @@ size_t Kmeans::groupCount() noexcept
 }
 
 /*******************************************
+ * @brief 获取指定的分组中心
+ * @param[in] idx 分组序号
+ * @return 分组的中心
+ * ****************************************/
+Text Kmeans::groupCenter(size_t idx) noexcept
+{
+    return m_groupCenters[idx];
+}
+
+/*******************************************
  * @brief 获取指定的分组
  * @param[in] idx 分组序号
  * @return 分组的数据

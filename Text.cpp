@@ -198,6 +198,13 @@ float Text::distance(const Text& text) const noexcept
     if (m_dims != text.dims())
         return -1;
 
+    if (Accelerator::instance().available())
+    {
+        Text ret{m_dims};
+        Accelerator::instance().distance(m_pos, text.m_pos, m_dims, ret.m_pos);
+        return ret[0];
+    }
+
     Text diff = *this - text;
     diff = diff * diff;
 

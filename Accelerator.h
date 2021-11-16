@@ -42,10 +42,35 @@ public:
     std::string name() const noexcept;
 
     /*******************************************
-     * @brief 获取一组任务的工作数量
+     * @brief 获取一组任务的最大工作数量
+     * @return 一组任务的最大工作数量
+     * ****************************************/
+    size_t maxLocalSize() const noexcept;
+
+    /*******************************************
+     * @brief 计算一组任务的工作数量
+     * @param[in] n 任务总数
      * @return 一组任务的工作数量
      * ****************************************/
-    size_t workSize() const noexcept;
+    size_t localSize(size_t n) const noexcept;
+
+    /*******************************************
+     * @brief 计算总工作数量
+     * @param[in] n 任务总数
+     * @return 总工作数量
+     * ****************************************/
+    size_t globalSize(size_t n) const noexcept;
+
+    /*******************************************
+     * @brief 对向量进行一次标量运算
+     * @param[in] kernel 运算核函数
+     * @param[in] localSize 一组工作项的数量
+     * @param[in] global 总工作项的数量
+     * @param[in] argc 参数个数
+     * @param[in] ... 传给核函数的参数,必须是 float[globalSize]
+     * @return 是否成功
+     * ****************************************/
+    bool invoke(cl_kernel kernel, size_t localSize, size_t globalSize, size_t argc, ...) const noexcept;
 
     /*******************************************
      * @brief 对向量进行一次标量运算
@@ -57,6 +82,7 @@ public:
      * @return 是否成功
      * ****************************************/
     bool scalar(const float* v1, const float* v2, size_t n, cl_kernel kernel, float* ret) const noexcept;
+
 
     /*******************************************
      * @brief 对向量进行一次标量加法运算,结果保存在v1
@@ -98,6 +124,16 @@ public:
      * ****************************************/
     bool div(const float* v1, float* v2, size_t n, float* ret) const noexcept;
 
+    /*******************************************
+     * @brief 计算两个坐标之间的距离
+     * @param[in] v1 向量1
+     * @param[in] v2 向量2
+     * @param[in] n 向量长度
+     * @param[out] ret 运算结果
+     * @return 是否成功
+     * ****************************************/
+    bool distance(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+
 private:
     static const char* source;
 
@@ -112,9 +148,10 @@ private:
     cl_kernel m_sub;
     cl_kernel m_mul;
     cl_kernel m_div;
+    cl_kernel m_groupSum;
 
     std::string m_name;
-    size_t m_localWorkSize;
+    size_t m_maxLocalSize;
 };
 
 }; // namespace AutoBug

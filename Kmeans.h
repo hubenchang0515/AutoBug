@@ -45,6 +45,13 @@ public:
     size_t groupCount() noexcept;
 
     /*******************************************
+     * @brief 获取指定的分组中心
+     * @param[in] idx 分组序号
+     * @return 分组的中心
+     * ****************************************/
+    Text groupCenter(size_t idx) noexcept;
+
+    /*******************************************
      * @brief 获取指定的分组
      * @param[in] idx 分组序号
      * @return 分组的数据

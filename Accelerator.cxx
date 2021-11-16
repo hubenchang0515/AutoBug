@@ -1,4 +1,6 @@
 #include "Accelerator.h"
+#include <cmath>
+#include <cstdarg>
 
 namespace AutoBug
 {
@@ -16,6 +18,7 @@ Accelerator& Accelerator::instance() noexcept
 Accelerator::~Accelerator() noexcept
 {
     clFinish(m_cmd);
+    clRetainKernel(m_groupSum);
     clReleaseKernel(m_add);
     clReleaseKernel(m_sub);
     clReleaseKernel(m_mul);
@@ -37,8 +40,9 @@ Accelerator::Accelerator() noexcept :
     m_sub(nullptr),
     m_mul(nullptr),
     m_div(nullptr),
+    m_groupSum(nullptr),
     m_name(""),
-    m_localWorkSize(64)
+    m_maxLocalSize(64)
 {
     // 获取平台
     cl_int state = clGetPlatformIDs(1, &m_pid, nullptr);
@@ -99,6 +103,7 @@ Accelerator::Accelerator() noexcept :
     m_sub = clCreateKernel(m_program, "sub", nullptr);
     m_mul = clCreateKernel(m_program, "mul", nullptr);
     m_div = clCreateKernel(m_program, "div", nullptr);
+    m_groupSum = clCreateKernel(m_program, "groupSum", nullptr);
 
     // 读取设备名称
     size_t n = 0;
@@ -116,10 +121,10 @@ Accelerator::Accelerator() noexcept :
     }
 
     // 读取设备一组任务的最大工作数量
-    state = clGetDeviceInfo(m_did, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &m_localWorkSize, nullptr);
+    state = clGetDeviceInfo(m_did, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &m_maxLocalSize, nullptr);
     if (state != CL_SUCCESS)
     {
-        m_localWorkSize = 64;
+        m_maxLocalSize = 64;
     }
 }
 
@@ -147,7 +152,8 @@ bool Accelerator::available() const noexcept
             (m_add != nullptr) &&
             (m_sub != nullptr) &&
             (m_mul != nullptr) &&
-            (m_div != nullptr);
+            (m_div != nullptr) &&
+            (m_groupSum != nullptr);
 }
 
 /*******************************************
@@ -163,9 +169,87 @@ std::string Accelerator::name() const noexcept
  * @brief 获取一组任务的工作数量
  * @return 一组任务的工作数量
  * ****************************************/
-size_t Accelerator::workSize() const noexcept
+size_t Accelerator::maxLocalSize() const noexcept
 {
-    return m_localWorkSize;
+    return m_maxLocalSize;
+}
+
+/*******************************************
+ * @brief 计算一组任务的工作数量
+ * @param[in] n 任务总数
+ * @return 一组任务的工作数量
+ * ****************************************/
+size_t Accelerator::localSize(size_t n) const noexcept
+{
+    if (m_maxLocalSize <= n)
+    {
+        return m_maxLocalSize;
+    }
+    else
+    {
+        return n;
+    }
+}
+
+/*******************************************
+ * @brief 计算总工作数量
+ * @param[in] n 任务总数
+ * @return 总工作数量
+ * ****************************************/
+size_t Accelerator::globalSize(size_t n) const noexcept
+{
+    if (m_maxLocalSize <= n)
+    {
+        return m_maxLocalSize * ((n - 1 + m_maxLocalSize)/ m_maxLocalSize);
+    }
+    else
+    {
+        return n;
+    }
+}
+
+/*******************************************
+ * @brief 对向量进行一次标量运算
+ * @param[in] kernel 运算核函数
+ * @param[in] localSize 一组工作项的数量
+ * @param[in] global 总工作项的数量
+ * @param[in] argc 参数个数
+ * @param[in] ... 传给核函数的参数,必须是 float[globalSize]
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::invoke(cl_kernel kernel, size_t localSize, size_t globalSize, size_t argc, ...) const noexcept
+{
+    bool success = true;                    // 返回值
+    int state;
+
+    va_list args;
+    va_start(args, argc);
+
+    // 设置调用参数
+    for (size_t i = 0; i < argc; i++)
+    {
+        cl_mem arg = va_arg(args, cl_mem);
+        state = clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&arg);
+        if (state != CL_SUCCESS)
+        {
+            fprintf(stderr, "failed to set arg\n");
+            success = false;
+            goto EXIT;
+        }
+    }
+
+    // 调用核函数
+    state = clEnqueueNDRangeKernel(m_cmd, kernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to invoke kernel\n");
+        success = false;
+        goto EXIT;
+    }
+
+EXIT:
+    va_end(args);
+    return success;
 }
 
 /*******************************************
@@ -179,110 +263,75 @@ size_t Accelerator::workSize() const noexcept
  * ****************************************/
 bool Accelerator::scalar(const float* v1, const float* v2, size_t n, cl_kernel kernel, float* ret) const noexcept
 {
-    bool success = true;                    // 返回值
-    cl_mem m1 = nullptr;                    // 显存
-    cl_mem m2 = nullptr;
-    cl_mem m3 = nullptr;
+    size_t localSize = this->localSize(n);
+    size_t globalSize = this->globalSize(n);
+    bool success = true;
     int state;
 
-    // 一组任务的数量
-    size_t localSize = m_localWorkSize <= n ? m_localWorkSize : n;
-    size_t globalSize = m_localWorkSize * ((n - 1 + m_localWorkSize)/ m_localWorkSize);
-
-    // 分配显存
-    m1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
-    if (state != CL_SUCCESS || m1 == nullptr)
-    {
-        fprintf(stderr, "failed to create buffer\n");
-        success = false;
-        goto EXIT;
-    }
-
-    m2 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
-    if (state != CL_SUCCESS || m2 == nullptr)
-    {
-        fprintf(stderr, "failed to create buffer\n");
-        success = false;
-        goto EXIT;
-    }
-
-    m3 = clCreateBuffer(m_ctx, CL_MEM_READ_ONLY, n * sizeof(float), nullptr, &state);
-    if (state != CL_SUCCESS || m3 == nullptr)
-    {
-        fprintf(stderr, "failed to create buffer\n");
-        success = false;
-        goto EXIT;
-    }
-
-    // 将内存上的数据写到显存上
-    state = clEnqueueWriteBuffer(m_cmd, m1, CL_TRUE, 0, n * sizeof(cl_float), v1, 0, nullptr, nullptr);
-    if (state != CL_SUCCESS)
-    {
-        fprintf(stderr, "failed to write buffer\n");
-        success = false;
-        goto EXIT;
-    }
+    // 参数
+    cl_mem arg1 = nullptr;
+    cl_mem arg2 = nullptr;
+    cl_mem arg3 = nullptr;
     
-    state = clEnqueueWriteBuffer(m_cmd, m2, CL_TRUE, 0, n * sizeof(cl_float), v2, 0, nullptr, nullptr);
+    arg1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
     if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to write buffer\n");
+        fprintf(stderr, "failed to create arg\n");
         success = false;
         goto EXIT;
     }
 
-    // 设置调用参数
-    state = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*)&m1);
+    arg2 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
     if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to set arg\n");
+        fprintf(stderr, "failed to create arg\n");
         success = false;
         goto EXIT;
     }
 
-    state = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&m2);
+    arg3 = clCreateBuffer(m_ctx, CL_MEM_READ_ONLY, globalSize * sizeof(float), nullptr, &state);
     if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to set arg\n");
+        fprintf(stderr, "failed to create arg\n");
         success = false;
         goto EXIT;
     }
 
-    state = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*)&m3);
+    state = clEnqueueWriteBuffer(m_cmd, arg1, CL_TRUE, 0, n * sizeof(float), v1, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to set arg\n");
+        fprintf(stderr, "failed to write arg\n");
         success = false;
         goto EXIT;
     }
 
-    // 调用核函数
-    state = clEnqueueNDRangeKernel(m_cmd, kernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
-    if (state != CL_SUCCESS || m2 == nullptr)
+    state = clEnqueueWriteBuffer(m_cmd, arg2, CL_TRUE, 0, n * sizeof(float), v2, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to invoke kernel\n");
+        fprintf(stderr, "failed to write arg\n");
         success = false;
         goto EXIT;
     }
 
-    // 读取运算结果
-    state = clEnqueueReadBuffer(m_cmd, m3, CL_TRUE, 0, n * sizeof(cl_float), ret, 0, nullptr, nullptr);
+    success = invoke(kernel, localSize, globalSize, 3, arg1, arg2, arg3);
+
+    state = clEnqueueReadBuffer(m_cmd, arg3, CL_TRUE, 0, n * sizeof(float), ret, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
     {
-        fprintf(stderr, "failed to read buffer\n");
+        fprintf(stderr, "failed to read arg\n");
         success = false;
         goto EXIT;
     }
 
 EXIT:
-    if (m1 != nullptr)
-        clReleaseMemObject(m1);
+    if (arg1 != nullptr)
+        clReleaseMemObject(arg1);
 
-    if (m2 != nullptr)
-        clReleaseMemObject(m2);
+    if (arg2 != nullptr)
+        clReleaseMemObject(arg2);
 
-    if (m3 != nullptr)
-        clReleaseMemObject(m3);
+    if (arg3 != nullptr)
+        clReleaseMemObject(arg3);
 
     return success;
 }
@@ -337,6 +386,98 @@ bool Accelerator::mul(const float* v1, float* v2, size_t n, float* ret) const no
 bool Accelerator::div(const float* v1, float* v2, size_t n, float* ret) const noexcept
 {
     return scalar(v1, v2, n, m_div, ret);
+}
+
+/*******************************************
+ * @brief 计算两个坐标元素的差的平方
+ * @param[in] v1 向量1
+ * @param[in] v2 向量2
+ * @param[in] n 向量长度
+ * @param[out] ret 运算结果
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::distance(const float* v1, float* v2, size_t n, float* ret) const noexcept
+{
+    size_t localSize = this->localSize(n);
+    size_t globalSize = this->globalSize(n);
+    bool success = true;
+    int state;
+
+    // 参数
+    cl_mem arg1 = nullptr;
+    cl_mem arg2 = nullptr;
+    cl_mem arg3 = nullptr;
+    
+    arg1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    arg2 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    arg3 = clCreateBuffer(m_ctx, CL_MEM_READ_ONLY, globalSize * sizeof(float), nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    state = clEnqueueWriteBuffer(m_cmd, arg1, CL_TRUE, 0, n * sizeof(float), v1, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to write arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    state = clEnqueueWriteBuffer(m_cmd, arg2, CL_TRUE, 0, n * sizeof(float), v2, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to write arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    success = invoke(m_sub, localSize, globalSize, 3, arg1, arg2, arg3);
+    success = invoke(m_mul, localSize, globalSize, 3, arg3, arg3, arg3);
+    success = invoke(m_groupSum, localSize, globalSize, 2, arg3, arg3);
+
+    state = clEnqueueReadBuffer(m_cmd, arg3, CL_TRUE, 0, n * sizeof(float), ret, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to read arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    for (size_t i = localSize; i < n; i += localSize)
+    {
+        ret[0] += ret[i];
+    }
+
+    ret[0] = std::sqrt(ret[0]);
+
+EXIT:
+    if (arg1 != nullptr)
+        clReleaseMemObject(arg1);
+
+    if (arg2 != nullptr)
+        clReleaseMemObject(arg2);
+
+    if (arg3 != nullptr)
+        clReleaseMemObject(arg3);
+
+    return success;
 }
 
 /* OpenCL源码 */
