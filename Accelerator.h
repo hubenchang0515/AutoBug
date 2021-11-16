@@ -4,7 +4,7 @@
 #ifndef CL_HPP_TARGET_OPENCL_VERSION 
 #define CL_HPP_TARGET_OPENCL_VERSION 200
 #endif // CL_HPP_TARGET_OPENCL_VERSION
-#include <CL/cl2.hpp>
+#include <CL/opencl.hpp>
 
 namespace AutoBug
 {
