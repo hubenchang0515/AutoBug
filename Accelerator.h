@@ -6,6 +6,10 @@
 #endif // CL_HPP_TARGET_OPENCL_VERSION
 #include <CL/cl2.hpp>
 
+#include <map>
+#include <vector>
+#include <string>
+
 namespace AutoBug
 {
 
@@ -144,6 +148,7 @@ public:
     bool distance(const float* v, float* v2, size_t n, float* ret) const noexcept;
 
 private:
+    static const std::vector<std::string> functions;
     static const char* source;
 
     bool m_enable;
@@ -153,14 +158,12 @@ private:
     cl_context m_ctx;
     cl_command_queue m_cmd;
     cl_program m_program;
-    cl_kernel m_add;
-    cl_kernel m_sub;
-    cl_kernel m_mul;
-    cl_kernel m_div;
-    cl_kernel m_reduction;
 
     std::string m_name;
     size_t m_maxLocalSize;
+
+    std::map<std::string, cl_kernel> m_kernels;
+    
 };
 
 }; // namespace AutoBug

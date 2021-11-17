@@ -18,11 +18,12 @@ Accelerator& Accelerator::instance() noexcept
 Accelerator::~Accelerator() noexcept
 {
     clFinish(m_cmd);
-    clRetainKernel(m_reduction);
-    clReleaseKernel(m_add);
-    clReleaseKernel(m_sub);
-    clReleaseKernel(m_mul);
-    clReleaseKernel(m_div);
+    
+    for (auto& kernel : m_kernels)
+    {
+        clReleaseKernel(kernel.second);
+    }
+
     clReleaseProgram(m_program);
     clReleaseCommandQueue(m_cmd);
     clReleaseContext(m_ctx);
@@ -36,11 +37,6 @@ Accelerator::Accelerator() noexcept :
     m_ctx(nullptr),
     m_cmd(nullptr),
     m_program(nullptr),
-    m_add(nullptr),
-    m_sub(nullptr),
-    m_mul(nullptr),
-    m_div(nullptr),
-    m_reduction(nullptr),
     m_name(""),
     m_maxLocalSize(64)
 {
@@ -99,11 +95,10 @@ Accelerator::Accelerator() noexcept :
     }
 
     // 加载kernel函数
-    m_add = clCreateKernel(m_program, "add", nullptr);
-    m_sub = clCreateKernel(m_program, "sub", nullptr);
-    m_mul = clCreateKernel(m_program, "mul", nullptr);
-    m_div = clCreateKernel(m_program, "div", nullptr);
-    m_reduction = clCreateKernel(m_program, "reduction", nullptr);
+    for (auto& name : functions)
+    {
+        m_kernels[name] = clCreateKernel(m_program, name.c_str(), nullptr);
+    }
 
     // 读取设备名称
     size_t n = 0;
@@ -143,17 +138,21 @@ void Accelerator::setEnable(bool enable) noexcept
  * ****************************************/
 bool Accelerator::available() const noexcept
 {
+    for (auto& kernel : m_kernels)
+    {
+        if (kernel.second == nullptr)
+        {
+            printf("%s\n", kernel.first.c_str());
+            return false;
+        }
+    }
+
     return  m_enable &&
             (m_pid != nullptr) &&
             (m_did != nullptr) &&
             (m_ctx != nullptr) &&
             (m_cmd != nullptr) &&
-            (m_program != nullptr) &&
-            (m_add != nullptr) &&
-            (m_sub != nullptr) &&
-            (m_mul != nullptr) &&
-            (m_div != nullptr) &&
-            (m_reduction != nullptr);
+            (m_program != nullptr);
 }
 
 /*******************************************
@@ -346,7 +345,14 @@ EXIT:
  * ****************************************/
 bool Accelerator::add(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
-    return scalar(v1, v2, n, m_add, ret);
+    try
+    {
+        return scalar(v1, v2, n, m_kernels.at("add"), ret);
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
 }
 
 /*******************************************
@@ -359,7 +365,14 @@ bool Accelerator::add(const float* v1, const float* v2, size_t n, float* ret) co
  * ****************************************/
 bool Accelerator::sub(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
-    return scalar(v1, v2, n, m_sub, ret);
+    try
+    {
+        return scalar(v1, v2, n, m_kernels.at("sub"), ret);
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
 }
 
 /*******************************************
@@ -372,7 +385,14 @@ bool Accelerator::sub(const float* v1, const float* v2, size_t n, float* ret) co
  * ****************************************/
 bool Accelerator::mul(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
-    return scalar(v1, v2, n, m_mul, ret);
+    try
+    {
+        return scalar(v1, v2, n, m_kernels.at("mul"), ret);
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
 }
 
 /*******************************************
@@ -385,7 +405,14 @@ bool Accelerator::mul(const float* v1, const float* v2, size_t n, float* ret) co
  * ****************************************/
 bool Accelerator::div(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
-    return scalar(v1, v2, n, m_div, ret);
+    try
+    {
+        return scalar(v1, v2, n, m_kernels.at("div"), ret);
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
 }
 
 /*******************************************
@@ -431,7 +458,16 @@ bool Accelerator::reduction(const float* v, size_t n, float* ret) const noexcept
         goto EXIT;
     }
 
-    success = invoke(m_reduction, localSize, globalSize, 2, arg1, arg2);
+    try
+    {
+        success = invoke(m_kernels.at("reduction"), localSize, globalSize, 2, arg1, arg2);
+    }
+    catch (std::out_of_range&)
+    {
+        success = false;
+        goto EXIT;
+    }
+    
 
     state = clEnqueueReadBuffer(m_cmd, arg2, CL_TRUE, 0, n * sizeof(float), temp, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
@@ -520,9 +556,15 @@ bool Accelerator::distance(const float* v1, float* v2, size_t n, float* ret) con
         goto EXIT;
     }
 
-    success = invoke(m_sub, localSize, globalSize, 3, arg1, arg2, arg3);
-    success = invoke(m_mul, localSize, globalSize, 3, arg3, arg3, arg3);
-    success = invoke(m_reduction, localSize, globalSize, 2, arg3, arg3);
+    try
+    {
+        success = invoke(m_kernels.at("distanceStep1"), localSize, globalSize, 3, arg1, arg2, arg3);
+    }
+    catch (std::out_of_range&)
+    {
+        success = false;
+        goto EXIT;
+    }    
 
     state = clEnqueueReadBuffer(m_cmd, arg3, CL_TRUE, 0, n * sizeof(float), ret, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
@@ -551,6 +593,12 @@ EXIT:
 
     return success;
 }
+
+/* 函数列表 */
+const std::vector<std::string> Accelerator::functions = {
+    "add", "sub", "div", "mul", "reduction",
+    "distanceStep1",
+};
 
 /* OpenCL源码 */
 const char* Accelerator::source = R"AutoBug($AUTO_BUG_ACCELERATOR_OPEN_CL_CODE)AutoBug";
