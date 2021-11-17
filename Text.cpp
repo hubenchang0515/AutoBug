@@ -171,6 +171,26 @@ void Text::setText(const std::string& text, const DimMap& dimMap) noexcept
 }
 
 /*******************************************
+ * @brief 计算内部向量的元素之和
+ * @return 元素之和
+ * ****************************************/
+float Text::sum() const noexcept
+{
+    float n = 0.0f;
+    if (Accelerator::instance().available())
+    {
+        Accelerator::instance().reduction(m_pos, m_dims, &n);
+        return n;
+    }
+
+    for (int i = 0; i < m_dims; i++)
+    {
+        n += m_pos[i];
+    }
+    return n;
+}
+
+/*******************************************
  * @brief 打印超空间坐标
  * @param[in] dimMap 超空间维度映射
  * ****************************************/
@@ -197,23 +217,9 @@ float Text::distance(const Text& text) const noexcept
     if (m_dims != text.dims())
         return -1;
 
-    if (Accelerator::instance().available())
-    {
-        Text ret{m_dims};
-        Accelerator::instance().distance(m_pos, text.m_pos, m_dims, ret.m_pos);
-        return ret[0];
-    }
-
     Text diff = *this - text;
     diff = diff * diff;
-
-    float sum = 0.0;
-    for (int i = 0; i < m_dims; i++)
-    {
-        sum += diff[i];
-    }
-
-    return std::sqrt(sum);
+    return std::sqrt(diff.sum());
 }
 
 /*******************************************

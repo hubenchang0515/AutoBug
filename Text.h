@@ -77,6 +77,12 @@ public:
     void setText(const std::string& text, const DimMap& dimMap) noexcept;
 
     /*******************************************
+     * @brief 计算内部向量的元素之和
+     * @return 元素之和
+     * ****************************************/
+    float sum() const noexcept;
+
+    /*******************************************
      * @brief 打印超空间坐标
      * @param[in] dimMap 超空间维度映射
      * ****************************************/

@@ -1,7 +1,8 @@
 /*******************************************
  * @brief 加法计算
- * @param[in] input 输入向量
- * @param[in] output 输出元素的和
+ * @param[in] x 输入向量
+ * @param[in] y 输入向量
+ * @param[in] ret 输出元素的和
  * ****************************************/
 __kernel void add(__global float* x, __global float* y, __global float* ret)
 {
@@ -13,8 +14,9 @@ __kernel void add(__global float* x, __global float* y, __global float* ret)
 
 /*******************************************
  * @brief 减法计算
- * @param[in] input 输入向量
- * @param[in] output 输出元素的和
+ * @param[in] x 输入向量
+ * @param[in] y 输入向量
+ * @param[in] ret 输出元素的差
  * ****************************************/
 __kernel void sub(__global float* x, __global float* y, __global float* ret)
 {
@@ -26,8 +28,9 @@ __kernel void sub(__global float* x, __global float* y, __global float* ret)
 
 /*******************************************
  * @brief 乘法计算
- * @param[in] input 输入向量
- * @param[in] output 输出元素的和
+ * @param[in] x 输入向量
+ * @param[in] y 输入向量
+ * @param[in] ret 输出元素的积
  * ****************************************/
 __kernel void mul(__global float* x, __global float* y, __global float* ret)
 {
@@ -40,8 +43,9 @@ __kernel void mul(__global float* x, __global float* y, __global float* ret)
 
 /*******************************************
  * @brief 除法计算
- * @param[in] input 输入向量
- * @param[in] output 输出元素的和
+ * @param[in] x 输入向量
+ * @param[in] y 输入向量
+ * @param[in] ret 输出元素的商
  * ****************************************/
 __kernel void div(__global float* x, __global float* y, __global float* ret)
 {
@@ -57,7 +61,7 @@ __kernel void div(__global float* x, __global float* y, __global float* ret)
  * @param[in] input 输入向量
  * @param[out] output 输出元素的和
  * ****************************************/
-__kernel void groupSum(__global float* input, __global float* output)
+__kernel void reduction(__global float* input, __global float* output)
 {
     size_t globalId = get_global_id(0);   	// 全局id
     size_t localId = get_local_id(0);     	// 组内id

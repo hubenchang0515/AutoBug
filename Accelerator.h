@@ -4,7 +4,7 @@
 #ifndef CL_HPP_TARGET_OPENCL_VERSION 
 #define CL_HPP_TARGET_OPENCL_VERSION 200
 #endif // CL_HPP_TARGET_OPENCL_VERSION
-#include <CL/opencl.hpp>
+#include <CL/cl2.hpp>
 
 namespace AutoBug
 {
@@ -65,9 +65,9 @@ public:
      * @brief 对向量进行一次标量运算
      * @param[in] kernel 运算核函数
      * @param[in] localSize 一组工作项的数量
-     * @param[in] global 总工作项的数量
+     * @param[in] globalSize 总工作项的数量
      * @param[in] argc 参数个数
-     * @param[in] ... 传给核函数的参数,必须是 float[globalSize]
+     * @param[in] ... 传给核函数的参数,必须是
      * @return 是否成功
      * ****************************************/
     bool invoke(cl_kernel kernel, size_t localSize, size_t globalSize, size_t argc, ...) const noexcept;
@@ -85,44 +85,53 @@ public:
 
 
     /*******************************************
-     * @brief 对向量进行一次标量加法运算,结果保存在v1
+     * @brief 对向量进行一次标量加法运算
      * @param[in] v1 向量1
      * @param[in] v2 向量2
      * @param[in] n 向量长度
      * @param[out] ret 运算结果
      * @return 是否成功
      * ****************************************/
-    bool add(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+    bool add(const float* v1, const float* v2, size_t n, float* ret) const noexcept;
 
     /*******************************************
-     * @brief 对向量进行一次标量减法运算,结果保存在v1
+     * @brief 对向量进行一次标量减法运算
      * @param[in] v1 向量1
      * @param[in] v2 向量2
      * @param[in] n 向量长度
      * @param[out] ret 运算结果
      * @return 是否成功
      * ****************************************/
-    bool sub(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+    bool sub(const float* v1, const float* v2, size_t n, float* ret) const noexcept;
 
     /*******************************************
-     * @brief 对向量进行一次标量乘法运算,结果保存在v1
+     * @brief 对向量进行一次标量乘法运算
      * @param[in] v1 向量1
      * @param[in] v2 向量2
      * @param[in] n 向量长度
      * @param[out] ret 运算结果
      * @return 是否成功
      * ****************************************/
-    bool mul(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+    bool mul(const float* v1, const float* v2, size_t n, float* ret) const noexcept;
 
     /*******************************************
-     * @brief 对向量进行一次标量除法运算,结果保存在v1
+     * @brief 对向量进行一次标量除法运算
      * @param[in] v1 向量1
      * @param[in] v2 向量2
      * @param[in] n 向量长度
      * @param[out] ret 运算结果
      * @return 是否成功
      * ****************************************/
-    bool div(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+    bool div(const float* v1, const float* v2, size_t n, float* ret) const noexcept;
+
+    /*******************************************
+     * @brief 对向量内的元素进行求和
+     * @param[in] v 要计算的向量
+     * @param[in] n 向量长度
+     * @param[out] ret 运算结果
+     * @return 是否成功
+     * ****************************************/
+    bool reduction(const float* v1, size_t n, float* ret) const noexcept;
 
     /*******************************************
      * @brief 计算两个坐标之间的距离
@@ -132,7 +141,7 @@ public:
      * @param[out] ret 运算结果
      * @return 是否成功
      * ****************************************/
-    bool distance(const float* v1, float* v2, size_t n, float* ret) const noexcept;
+    bool distance(const float* v, float* v2, size_t n, float* ret) const noexcept;
 
 private:
     static const char* source;
@@ -148,7 +157,7 @@ private:
     cl_kernel m_sub;
     cl_kernel m_mul;
     cl_kernel m_div;
-    cl_kernel m_groupSum;
+    cl_kernel m_reduction;
 
     std::string m_name;
     size_t m_maxLocalSize;

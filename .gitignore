@@ -35,3 +35,4 @@
 autobug
 Accelerator.cpp
 profile.txt
+callgrind.out*

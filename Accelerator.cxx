@@ -18,7 +18,7 @@ Accelerator& Accelerator::instance() noexcept
 Accelerator::~Accelerator() noexcept
 {
     clFinish(m_cmd);
-    clRetainKernel(m_groupSum);
+    clRetainKernel(m_reduction);
     clReleaseKernel(m_add);
     clReleaseKernel(m_sub);
     clReleaseKernel(m_mul);
@@ -40,7 +40,7 @@ Accelerator::Accelerator() noexcept :
     m_sub(nullptr),
     m_mul(nullptr),
     m_div(nullptr),
-    m_groupSum(nullptr),
+    m_reduction(nullptr),
     m_name(""),
     m_maxLocalSize(64)
 {
@@ -103,7 +103,7 @@ Accelerator::Accelerator() noexcept :
     m_sub = clCreateKernel(m_program, "sub", nullptr);
     m_mul = clCreateKernel(m_program, "mul", nullptr);
     m_div = clCreateKernel(m_program, "div", nullptr);
-    m_groupSum = clCreateKernel(m_program, "groupSum", nullptr);
+    m_reduction = clCreateKernel(m_program, "reduction", nullptr);
 
     // 读取设备名称
     size_t n = 0;
@@ -153,7 +153,7 @@ bool Accelerator::available() const noexcept
             (m_sub != nullptr) &&
             (m_mul != nullptr) &&
             (m_div != nullptr) &&
-            (m_groupSum != nullptr);
+            (m_reduction != nullptr);
 }
 
 /*******************************************
@@ -212,9 +212,9 @@ size_t Accelerator::globalSize(size_t n) const noexcept
  * @brief 对向量进行一次标量运算
  * @param[in] kernel 运算核函数
  * @param[in] localSize 一组工作项的数量
- * @param[in] global 总工作项的数量
+ * @param[in] globalSize 总工作项的数量
  * @param[in] argc 参数个数
- * @param[in] ... 传给核函数的参数,必须是 float[globalSize]
+ * @param[in] ... 传给核函数的参数
  * @return 是否成功
  * ****************************************/
 bool Accelerator::invoke(cl_kernel kernel, size_t localSize, size_t globalSize, size_t argc, ...) const noexcept
@@ -337,55 +337,127 @@ EXIT:
 }
 
 /*******************************************
- * @brief 对向量进行一次标量加法运算,结果保存在v1
+ * @brief 对向量进行一次标量加法运算
  * @param[in] v1 向量1
  * @param[in] v2 向量2
  * @param[in] n 向量长度
  * @param[out] ret 运算结果
  * @return 是否成功
  * ****************************************/
-bool Accelerator::add(const float* v1, float* v2, size_t n, float* ret) const noexcept
+bool Accelerator::add(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
     return scalar(v1, v2, n, m_add, ret);
 }
 
 /*******************************************
- * @brief 对向量进行一次标量减法运算,结果保存在v1
+ * @brief 对向量进行一次标量减法运算
  * @param[in] v1 向量1
  * @param[in] v2 向量2
  * @param[in] n 向量长度
  * @param[out] ret 运算结果
  * @return 是否成功
  * ****************************************/
-bool Accelerator::sub(const float* v1, float* v2, size_t n, float* ret) const noexcept
+bool Accelerator::sub(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
     return scalar(v1, v2, n, m_sub, ret);
 }
 
 /*******************************************
- * @brief 对向量进行一次标量乘法运算,结果保存在v1
+ * @brief 对向量进行一次标量乘法运算
  * @param[in] v1 向量1
  * @param[in] v2 向量2
  * @param[in] n 向量长度
  * @param[out] ret 运算结果
  * @return 是否成功
  * ****************************************/
-bool Accelerator::mul(const float* v1, float* v2, size_t n, float* ret) const noexcept
+bool Accelerator::mul(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
     return scalar(v1, v2, n, m_mul, ret);
 }
 
 /*******************************************
- * @brief 对向量进行一次标量除法运算,结果保存在v1
+ * @brief 对向量进行一次标量除法运算
  * @param[in] v1 向量1
  * @param[in] v2 向量2
  * @param[in] n 向量长度
  * @param[out] ret 运算结果
  * @return 是否成功
  * ****************************************/
-bool Accelerator::div(const float* v1, float* v2, size_t n, float* ret) const noexcept
+bool Accelerator::div(const float* v1, const float* v2, size_t n, float* ret) const noexcept
 {
     return scalar(v1, v2, n, m_div, ret);
+}
+
+/*******************************************
+ * @brief 对向量内的元素进行求和
+ * @param[in] v 要计算的向量
+ * @param[in] n 向量长度
+ * @param[out] ret 运算结果
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::reduction(const float* v, size_t n, float* ret) const noexcept
+{
+    size_t localSize = this->localSize(n);
+    size_t globalSize = this->globalSize(n);
+    bool success = true;
+    int state;
+
+    // 参数
+    cl_mem arg1 = nullptr;
+    cl_mem arg2 = nullptr;
+    float* temp = new float[n];
+
+    arg1 = clCreateBuffer(m_ctx, CL_MEM_WRITE_ONLY, globalSize * sizeof(float), nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    arg2 = clCreateBuffer(m_ctx, CL_MEM_READ_ONLY, globalSize * sizeof(float), nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    state = clEnqueueWriteBuffer(m_cmd, arg1, CL_TRUE, 0, n * sizeof(float), v, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to write arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    success = invoke(m_reduction, localSize, globalSize, 2, arg1, arg2);
+
+    state = clEnqueueReadBuffer(m_cmd, arg2, CL_TRUE, 0, n * sizeof(float), temp, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to read arg\n");
+        success = false;
+        goto EXIT;
+    }
+
+    *ret = 0.0f;
+    for (size_t i = 0; i < n; i += localSize)
+    {
+        *ret += temp[i];
+    }
+
+EXIT:
+    if (arg1 != nullptr)
+        clReleaseMemObject(arg1);
+
+    if (arg2 != nullptr)
+        clReleaseMemObject(arg2);
+
+    if (temp != nullptr)
+        delete[] temp;
+
+    return success;
 }
 
 /*******************************************
@@ -450,7 +522,7 @@ bool Accelerator::distance(const float* v1, float* v2, size_t n, float* ret) con
 
     success = invoke(m_sub, localSize, globalSize, 3, arg1, arg2, arg3);
     success = invoke(m_mul, localSize, globalSize, 3, arg3, arg3, arg3);
-    success = invoke(m_groupSum, localSize, globalSize, 2, arg3, arg3);
+    success = invoke(m_reduction, localSize, globalSize, 2, arg3, arg3);
 
     state = clEnqueueReadBuffer(m_cmd, arg3, CL_TRUE, 0, n * sizeof(float), ret, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)

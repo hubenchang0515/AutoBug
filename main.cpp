@@ -124,7 +124,7 @@ private:
 int main()
 {
     setlocale(LC_ALL, "");
-    Accelerator::instance().setEnable(false);
+    // Accelerator::instance().setEnable(false);
     if (Accelerator::instance().available())
     {
         printf("Use GPU: %s\n", Accelerator::instance().name().c_str());
