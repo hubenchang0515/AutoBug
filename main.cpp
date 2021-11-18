@@ -16,12 +16,16 @@ public:
     /*******************************************
      * @brief 输入数据集进行学习,会清空以前的数据
      * @param[in] dataset 数据集
-     * @param[in] n 初始分类数量
+     * @param[in] n 要计算的样本数量,0表示全部
      * @return 最终分类数量
      * ****************************************/
     size_t learn(std::vector<Text> dataset, size_t n=0) noexcept
     {
-        size_t k = n == 0 ? (dataset.size() + 4) / 5 : n;
+        if (n != 0 && n < dataset.size())
+        {
+            dataset.resize(n);
+        }
+        size_t k = (dataset.size() + 4) / 5;
         Kmeans kmeans{dataset, k};
         kmeans.learn(0.1f);
 
@@ -134,7 +138,7 @@ int main()
     }
     auto dataset = DataLoader::load("bug.csv", DimMap::instance());
     Classifier classifier;
-    classifier.learn(dataset);
+    classifier.learn(dataset, 100);
     classifier.print();
 
     // Kmeans k{dataset, 30};
