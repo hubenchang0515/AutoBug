@@ -24,6 +24,11 @@ Accelerator::~Accelerator() noexcept
         clReleaseKernel(kernel.second);
     }
 
+    for (auto& buff : m_buffers)
+    {
+        clReleaseMemObject(buff.second);
+    }
+
     clReleaseProgram(m_program);
     clReleaseCommandQueue(m_cmd);
     clReleaseContext(m_ctx);
@@ -208,7 +213,159 @@ size_t Accelerator::globalSize(size_t n) const noexcept
 }
 
 /*******************************************
- * @brief 对向量进行一次标量运算
+ * @brief 获取一个核函数
+ * @param[in] name 核函数的名字
+ * @return 核函数
+ * ****************************************/
+cl_kernel Accelerator::kernel(const std::string& name) const noexcept
+{
+    try
+    {
+        return m_kernels.at(name);
+    }
+    catch (std::out_of_range&)
+    {
+        return nullptr;
+    }
+}
+
+/*******************************************
+ * @brief 获取一个缓存
+ * @param[in] name 缓存的名字
+ * @return 缓存
+ * ****************************************/
+cl_mem Accelerator::buffer(const std::string& name) const noexcept
+{
+    try
+    {
+        return m_buffers.at(name);
+    }
+    catch (std::out_of_range&)
+    {
+        return nullptr;
+    }
+}
+
+/*******************************************
+ * @brief 创建一个缓存
+ * @param[in] name 缓存的名字
+ * @param[in] bytes 缓存的大小
+ * @return 创建的缓存
+ * ****************************************/
+cl_mem Accelerator::createBuffer(const std::string& name, size_t bytes) noexcept
+{
+    int state;
+    cl_mem buff = clCreateBuffer(m_ctx, CL_MEM_READ_WRITE, bytes, nullptr, &state);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to create buffer\n");
+        return nullptr;
+    }
+
+    const auto& iter = m_buffers.find(name);
+    if (iter != m_buffers.end())
+    {
+        clReleaseMemObject(iter->second);
+    }
+    m_buffers[name] = buff;
+    return buff;
+}
+
+/*******************************************
+ * @brief 写一个缓存
+ * @param[in] name 缓存名字
+ * @param[in] offset 缓存内位置
+ * @param[in] ptr 数据
+ * @param[in] byets 数据大小
+ * @param[in] block 是否阻塞
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::writeBuffer(const std::string& name, size_t offset, void* ptr, size_t bytes, bool block) noexcept
+{
+    try
+    {
+        int state = clEnqueueWriteBuffer(m_cmd, m_buffers.at(name), block, offset, bytes, ptr, 0, nullptr, nullptr);
+        if (state != CL_SUCCESS)
+        {
+            fprintf(stderr, "failed to write buffer\n");
+            return false;
+        }
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+/*******************************************
+ * @brief 读一个缓存
+ * @param[in] name 缓存名字
+ * @param[in] offset 缓存内位置
+ * @param[in] ptr 数据
+ * @param[in] byets 数据大小
+ * @param[in] block 是否阻塞
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::readBuffer(const std::string& name, size_t offset, void* ptr, size_t bytes, bool block) const noexcept
+{
+    try
+    {
+        int state = clEnqueueReadBuffer(m_cmd, m_buffers.at(name), block, offset, bytes, ptr, 0, nullptr, nullptr);
+        if (state != CL_SUCCESS)
+        {
+            fprintf(stderr, "failed to write buffer\n");
+            return false;
+        }
+    }
+    catch (std::out_of_range&)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+/*******************************************
+ * @brief 给核函数设置参数
+ * @param[in] kernel 核函数的名字
+ * @param[in] i 参数序号,从0开始
+ * @param[in] arg 参数
+ * @param[in] size 参数的大小
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::setArg(cl_kernel kernel, int i, void* arg, size_t size) noexcept
+{
+    int state = clSetKernelArg(kernel, i, size, arg);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to set arg\n");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************
+ * @brief 调用一个核函数
+ * @param[in] kernel 运算核函数
+ * @param[in] localSize 一组工作项的数量
+ * @param[in] globalSize 总工作项的数量
+ * @return 是否成功
+ * ****************************************/
+bool Accelerator::invoke(cl_kernel kernel, size_t localSize, size_t globalSize) const noexcept
+{
+    int state = clEnqueueNDRangeKernel(m_cmd, kernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+    if (state != CL_SUCCESS)
+    {
+        fprintf(stderr, "failed to invoke kernel\n");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************
+ * @brief 调用一个核函数
  * @param[in] kernel 运算核函数
  * @param[in] localSize 一组工作项的数量
  * @param[in] globalSize 总工作项的数量
@@ -540,7 +697,7 @@ bool Accelerator::distance(const float* v1, float* v2, size_t n, float* ret) con
         goto EXIT;
     }
 
-    state = clEnqueueWriteBuffer(m_cmd, arg1, CL_TRUE, 0, n * sizeof(float), v1, 0, nullptr, nullptr);
+    state = clEnqueueWriteBuffer(m_cmd, arg1, CL_FALSE, 0, n * sizeof(float), v1, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
     {
         fprintf(stderr, "failed to write arg\n");
@@ -548,7 +705,7 @@ bool Accelerator::distance(const float* v1, float* v2, size_t n, float* ret) con
         goto EXIT;
     }
 
-    state = clEnqueueWriteBuffer(m_cmd, arg2, CL_TRUE, 0, n * sizeof(float), v2, 0, nullptr, nullptr);
+    state = clEnqueueWriteBuffer(m_cmd, arg2, CL_FALSE, 0, n * sizeof(float), v2, 0, nullptr, nullptr);
     if (state != CL_SUCCESS)
     {
         fprintf(stderr, "failed to write arg\n");
@@ -597,7 +754,7 @@ EXIT:
 /* 函数列表 */
 const std::vector<std::string> Accelerator::functions = {
     "add", "sub", "div", "mul", "reduction",
-    "distanceStep1",
+    "distanceStep1", "findNearest", "updatePoints"
 };
 
 /* OpenCL源码 */

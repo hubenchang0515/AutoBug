@@ -134,4 +134,8 @@ int main()
     Classifier classifier;
     classifier.learn(dataset);
     classifier.print();
+
+    // Kmeans k{dataset, 10};
+    // k.learn(0.1);
+    // k.print();
 }

@@ -1,4 +1,5 @@
 #include "Kmeans.h"
+#include "Accelerator.h"
 
 namespace AutoBug
 {
@@ -43,6 +44,67 @@ void Kmeans::setGroupCount(size_t k) noexcept
      * @param[in] threshold 偏移阈值
      * ****************************************/
 void Kmeans::learn(float threshold) noexcept
+{
+    if (m_dataset.size() > 100 && Accelerator::instance().available())
+    {
+        m_gpuLearn(threshold);
+    }
+    else
+    {
+        m_cpuLearn(threshold);
+    }
+}
+
+/*******************************************
+ * @brief 打印学习后的各个分组
+ * ****************************************/
+void Kmeans::print() noexcept
+{
+    for (size_t i = 0; i < m_groups.size(); i++)
+    {
+        printf("Group %zu:\n", i);
+        for (auto& item : m_groups[i])
+        {
+            printf("\t%ls\n", item.text().c_str());
+        }
+    }
+}
+
+/*******************************************
+ * @brief 获取分组数量
+ * @return 分组数量
+ * ****************************************/
+size_t Kmeans::groupCount() noexcept
+{
+    return m_k;
+}
+
+/*******************************************
+ * @brief 获取指定的分组中心
+ * @param[in] idx 分组序号
+ * @return 分组的中心
+ * ****************************************/
+Text Kmeans::groupCenter(size_t idx) noexcept
+{
+    return m_groupCenters[idx];
+}
+
+/*******************************************
+ * @brief 获取指定的分组
+ * @param[in] idx 分组序号
+ * @return 分组的数据
+ * ****************************************/
+std::vector<Text> Kmeans::group(size_t idx) noexcept
+{
+    return m_groups[idx];
+}
+
+/*******************************************
+ * @brief 进行学习,中心点的移动距离小于偏移阈值时
+ *        学习结束
+ * @param[in] threshold 偏移阈值
+ * ****************************************/
+void Kmeans::m_cpuLearn(float threshold) noexcept
 {
     int dims = m_dataset[0].dims();
 
@@ -106,47 +168,73 @@ void Kmeans::learn(float threshold) noexcept
 }
 
 /*******************************************
- * @brief 打印学习后的各个分组
+ * @brief 进行学习,中心点的移动距离小于偏移阈值时
+ *        学习结束
+ * @param[in] threshold 偏移阈值
  * ****************************************/
-void Kmeans::print() noexcept
+void Kmeans::m_gpuLearn(float threshold) noexcept
 {
-    for (size_t i = 0; i < m_groups.size(); i++)
+    (void)(threshold);
+
+    // 随机选取k个样本作为初始中心点,这里直接选取前k个样本
+    for (size_t i = 0; i < m_k; i++)
     {
-        printf("Group %zu:\n", i);
-        for (auto& item : m_groups[i])
-        {
-            printf("\t%ls\n", item.text().c_str());
-        }
+        m_groupCenters[i] = m_dataset[i];
     }
-}
 
-/*******************************************
- * @brief 获取分组数量
- * @return 分组数量
- * ****************************************/
-size_t Kmeans::groupCount() noexcept
-{
-    return m_k;
-}
+    auto& gpu = Accelerator::instance();
+    int k = m_k;
+    int dims = m_dataset[0].dims();
+    int count = m_dataset.size();
 
-/*******************************************
- * @brief 获取指定的分组中心
- * @param[in] idx 分组序号
- * @return 分组的中心
- * ****************************************/
-Text Kmeans::groupCenter(size_t idx) noexcept
-{
-    return m_groupCenters[idx];
-}
+    int findNearestLocalSize = gpu.localSize(count);
+    int findNearestGlobalSize = gpu.globalSize(count);
 
-/*******************************************
- * @brief 获取指定的分组
- * @param[in] idx 分组序号
- * @return 分组的数据
- * ****************************************/
-std::vector<Text> Kmeans::group(size_t idx) noexcept
-{
-    return m_groups[idx];
+    int updatePointsLocalSize = gpu.localSize(count);
+    int updatePointsGlobalSize = gpu.globalSize(count);
+
+    auto items = gpu.createBuffer("items", sizeof(float) * dims * count);
+    auto points = gpu.createBuffer("points", sizeof(float) * dims * m_k);
+    auto assignment = gpu.createBuffer("assignment", sizeof(int) * count);
+
+    for (int i = 0; i < count; i++)
+    {
+        gpu.writeBuffer("items", i * sizeof(float) * dims, m_dataset[i].pos(), sizeof(float) * dims, false);
+    }
+
+    for (size_t i = 0; i < m_k; i++)
+    {
+        gpu.writeBuffer("points", i * sizeof(float) * dims, m_groupCenters[i].pos(), sizeof(float) * dims, false);
+    }
+    
+    gpu.setArg(gpu.kernel("findNearest"), 0, &items, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("findNearest"), 1, &points, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("findNearest"), 2, &assignment, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("findNearest"), 3, &dims, sizeof(dims));
+    gpu.setArg(gpu.kernel("findNearest"), 4, &k, sizeof(k));
+    gpu.setArg(gpu.kernel("findNearest"), 5, &count, sizeof(count));
+
+    gpu.setArg(gpu.kernel("updatePoints"), 0, &items, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("updatePoints"), 1, &points, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("updatePoints"), 2, &assignment, sizeof(cl_mem));
+    gpu.setArg(gpu.kernel("updatePoints"), 3, &dims, sizeof(dims));
+    gpu.setArg(gpu.kernel("updatePoints"), 4, &k, sizeof(k));
+    gpu.setArg(gpu.kernel("updatePoints"), 5, &count, sizeof(count));
+
+    for (int i = 0; i < 10; i++)
+    {
+        gpu.invoke(gpu.kernel("findNearest"), findNearestLocalSize, findNearestGlobalSize);
+        gpu.invoke(gpu.kernel("updatePoints"), updatePointsLocalSize, updatePointsGlobalSize);
+    }
+
+    int* assign = new int[count];
+    gpu.readBuffer("assignment", 0, assign, count * sizeof(int), true);
+    for (int i = 0; i < count; i++)
+    {
+        int group = assign[i];
+        m_groups[group].push_back(m_dataset[i]);
+    }
+    delete[] assign;
 }
 
 }; // namespace AutoBug

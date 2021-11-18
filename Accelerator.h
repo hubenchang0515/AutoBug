@@ -66,7 +66,70 @@ public:
     size_t globalSize(size_t n) const noexcept;
 
     /*******************************************
-     * @brief 对向量进行一次标量运算
+     * @brief 获取一个核函数
+     * @param[in] name 核函数的名字
+     * @return 核函数
+     * ****************************************/
+    cl_kernel kernel(const std::string& name) const noexcept;
+
+    /*******************************************
+     * @brief 获取一个缓存
+     * @param[in] name 缓存的名字
+     * @return 缓存
+     * ****************************************/
+    cl_mem buffer(const std::string& name) const noexcept;
+
+    /*******************************************
+     * @brief 创建一个缓存
+     * @param[in] name 缓存的名字
+     * @param[in] bytes 缓存的大小
+     * @return 创建的缓存
+     * ****************************************/
+    cl_mem createBuffer(const std::string& name, size_t bytes) noexcept;
+
+    /*******************************************
+     * @brief 写一个缓存
+     * @param[in] name 缓存名字
+     * @param[in] offset 缓存内位置
+     * @param[in] ptr 数据
+     * @param[in] byets 数据大小
+     * @param[in] block 是否阻塞
+     * @return 是否成功
+     * ****************************************/
+    bool writeBuffer(const std::string& name, size_t offset, void* ptr, size_t bytes, bool block) noexcept;
+
+    /*******************************************
+     * @brief 读一个缓存
+     * @param[in] name 缓存名字
+     * @param[in] offset 缓存内位置
+     * @param[in] ptr 数据
+     * @param[in] byets 数据大小
+     * @param[in] block 是否阻塞
+     * @return 是否成功
+     * ****************************************/
+    bool readBuffer(const std::string& name, size_t offset, void* ptr, size_t bytes, bool block) const noexcept;
+
+    /*******************************************
+     * @brief 给核函数设置参数
+     * @param[in] kernel 核函数的名字
+     * @param[in] i 参数序号,从0开始
+     * @param[in] arg 参数
+     * @param[in] size 参数的大小
+     * @return 是否成功
+     * ****************************************/
+    bool setArg(cl_kernel kernel, int i, void* arg, size_t size) noexcept;
+
+    /*******************************************
+     * @brief 调用一个核函数
+     * @param[in] kernel 运算核函数
+ * @param[in] localSize 一组工作项的数量
+ * @param[in] globalSize 总工作项的数量
+     * @return 是否成功
+     * ****************************************/
+    bool invoke(cl_kernel kernel, size_t localSize, size_t globalSize) const noexcept;
+
+    /*******************************************
+     * @brief 调用一个核函数
      * @param[in] kernel 运算核函数
      * @param[in] localSize 一组工作项的数量
      * @param[in] globalSize 总工作项的数量
@@ -161,6 +224,9 @@ private:
 
     std::string m_name;
     size_t m_maxLocalSize;
+
+
+    std::map<std::string, cl_mem> m_buffers;
 
     std::map<std::string, cl_kernel> m_kernels;
     

@@ -9,7 +9,6 @@
 
 #include "Text.h"
 #include "DimMap.h"
-#include "Accelerator.h"
 
 namespace AutoBug
 {
@@ -48,6 +47,15 @@ Text::Text(Text&& src) noexcept :
     src.m_dims = 0;
     src.m_pos = nullptr;
     src.m_text = L"";
+}
+
+/*******************************************
+ * @brief 获取坐标
+ * @return 坐标
+ * ****************************************/
+float* Text::pos() noexcept
+{
+    return m_pos;
 }
 
 /*******************************************
@@ -177,12 +185,6 @@ void Text::setText(const std::string& text, const DimMap& dimMap) noexcept
 float Text::sum() const noexcept
 {
     float n = 0.0f;
-    if (Accelerator::instance().available())
-    {
-        Accelerator::instance().reduction(m_pos, m_dims, &n);
-        return n;
-    }
-
     for (int i = 0; i < m_dims; i++)
     {
         n += m_pos[i];
@@ -216,15 +218,6 @@ float Text::distance(const Text& text) const noexcept
 {
     if (m_dims != text.dims())
         return -1;
-
-    if (Accelerator::instance().available())
-    {
-        Text ret{m_dims};
-        Accelerator::instance().distance(m_pos, text.m_pos, m_dims, ret.m_pos);
-        return ret[0];
-    }
-
-
     Text diff = *this - text;
     diff = diff * diff;
     return std::sqrt(diff.sum());
@@ -304,13 +297,6 @@ Text Text::operator + (const Text& obj) const
     if (m_dims != obj.m_dims)
         throw std::runtime_error("different dimensions");
 
-    if (Accelerator::instance().available())
-    {
-        Text result{m_dims};
-        Accelerator::instance().add(m_pos, obj.m_pos, m_dims, result.m_pos);
-        return result;
-    }
-
     return scalar(obj, [](float x, float y) -> float {return x+y;});
 }
 
@@ -323,13 +309,6 @@ Text Text::operator - (const Text& obj) const
 {
     if (m_dims != obj.m_dims)
         throw std::runtime_error("different dimensions");
-
-    if (Accelerator::instance().available())
-    {
-        Text result{m_dims};
-        Accelerator::instance().sub(m_pos, obj.m_pos, m_dims, result.m_pos);
-        return result;
-    }
 
     return scalar(obj, [](float x, float y) -> float {return x-y;});
 }
@@ -344,13 +323,6 @@ Text Text::operator * (const Text& obj) const
     if (m_dims != obj.m_dims)
         throw std::runtime_error("different dimensions");
 
-    if (Accelerator::instance().available())
-    {
-        Text result{m_dims};
-        Accelerator::instance().mul(m_pos, obj.m_pos, m_dims, result.m_pos);
-        return result;
-    }
-
     return scalar(obj, [](float x, float y) -> float {return x*y;});
 }
 
@@ -363,13 +335,6 @@ Text Text::operator / (const Text& obj) const
 {
     if (m_dims != obj.m_dims)
         throw std::runtime_error("different dimensions");
-
-    if (Accelerator::instance().available())
-    {
-        Text result{m_dims};
-        Accelerator::instance().div(m_pos, obj.m_pos, m_dims, result.m_pos);
-        return result;
-    }
 
     return scalar(obj, [](float x, float y) -> float {return x/y;});
 }

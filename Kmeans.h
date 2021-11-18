@@ -63,7 +63,20 @@ private:
     std::vector<Text> m_dataset;
     std::vector<Text> m_groupCenters;
     std::vector<std::vector<Text>> m_groups;
-    
+
+    /*******************************************
+     * @brief 进行学习,中心点的移动距离小于偏移阈值时
+     *        学习结束
+     * @param[in] threshold 偏移阈值
+     * ****************************************/
+    void m_cpuLearn(float threshold) noexcept;
+
+    /*******************************************
+     * @brief 进行学习,中心点的移动距离小于偏移阈值时
+     *        学习结束
+     * @param[in] threshold 偏移阈值
+     * ****************************************/
+    void m_gpuLearn(float threshold) noexcept;
 };
 
 }; // namespace AutoBug
