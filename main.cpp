@@ -34,11 +34,7 @@ public:
 
         for (size_t idx = 0; idx < m_groups.size();)
         {
-            if (m_groups[idx].size() > 3)
-            {
-                m_split(idx);
-            }
-            else
+            if (m_groups[idx].size() <= 10 || m_split(idx) == 1)
             {
                 idx++;
             }
@@ -101,23 +97,29 @@ private:
      *        当前索引会引用到下一个分组
      * @param[in] idx 要拆分的分组都序号
      * @param[in] n 期望的平均分组大小,默认为3
+     * @return 拆分成了几个组
      * ****************************************/
-    void m_split(size_t idx, int n=3)
+    size_t m_split(size_t idx, int n=3)
     {
         auto dataset = m_groups[idx];
         size_t k = (dataset.size() + n - 1) / n;
         Kmeans kmeans{dataset, k};
         kmeans.learn(0.1f);
 
+        size_t count = 0;
         for (size_t i = 0; i < k; i++)
         {
             auto group = kmeans.group(i);
+            if (group.size() ==0)
+                continue;
             m_groupCenters.push_back(kmeans.groupCenter(i));
             m_groups.push_back(group);
+            count++;
         }
 
         m_groupCenters.erase(m_groupCenters.begin() + idx);
         m_groups.erase(m_groups.begin() + idx);
+        return count;
     }
 };
 
@@ -130,12 +132,12 @@ int main()
         printf("Use GPU: %s\n", Accelerator::instance().name().c_str());
         printf("Max Work Size: %zu\n", Accelerator::instance().maxLocalSize());
     }
-    auto dataset = DataLoader::load("train.txt", DimMap::instance());
+    auto dataset = DataLoader::load("bug.csv", DimMap::instance());
     Classifier classifier;
     classifier.learn(dataset);
     classifier.print();
 
-    // Kmeans k{dataset, 10};
+    // Kmeans k{dataset, 30};
     // k.learn(0.1);
     // k.print();
 }
