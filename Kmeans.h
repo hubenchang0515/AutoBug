@@ -27,11 +27,10 @@ public:
     void setGroupCount(size_t k) noexcept;
 
     /*******************************************
-     * @brief 进行学习,中心点的移动距离小于偏移阈值时
-     *        学习结束
-     * @param[in] threshold 偏移阈值
+     * @brief 进行学习
+     * @param[in] n 学习轮次
      * ****************************************/
-    void learn(float threshold) noexcept;
+    void learn(int threshold) noexcept;
 
     /*******************************************
      * @brief 打印学习后的各个分组
@@ -65,18 +64,16 @@ private:
     std::vector<std::vector<Text>> m_groups;
 
     /*******************************************
-     * @brief 进行学习,中心点的移动距离小于偏移阈值时
-     *        学习结束
-     * @param[in] threshold 偏移阈值
+     * @brief 通过CPU进行学习
+     * @param[in] round 学习轮次
      * ****************************************/
-    void m_cpuLearn(float threshold) noexcept;
+    void m_cpuLearn(int round) noexcept;
 
     /*******************************************
-     * @brief 进行学习,中心点的移动距离小于偏移阈值时
-     *        学习结束
-     * @param[in] threshold 偏移阈值
+     * @brief 通过GPU进行学习
+     * @param[in] round 学习轮次
      * ****************************************/
-    void m_gpuLearn(float threshold) noexcept;
+    void m_gpuLearn(int round) noexcept;
 };
 
 }; // namespace AutoBug

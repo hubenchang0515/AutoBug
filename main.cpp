@@ -27,7 +27,7 @@ public:
         }
         size_t k = (dataset.size() + 4) / 5;
         Kmeans kmeans{dataset, k};
-        kmeans.learn(0.1f);
+        kmeans.learn(10);
 
         for (size_t idx = 0; idx < k; idx++)
         {
@@ -108,7 +108,7 @@ private:
         auto dataset = m_groups[idx];
         size_t k = (dataset.size() + n - 1) / n;
         Kmeans kmeans{dataset, k};
-        kmeans.learn(0.1f);
+        kmeans.learn(10);
 
         size_t count = 0;
         for (size_t i = 0; i < k; i++)
@@ -138,10 +138,6 @@ int main()
     }
     auto dataset = DataLoader::load("bug.csv", DimMap::instance());
     Classifier classifier;
-    classifier.learn(dataset, 100);
+    classifier.learn(dataset, 1000);
     classifier.print();
-
-    // Kmeans k{dataset, 30};
-    // k.learn(0.1);
-    // k.print();
 }

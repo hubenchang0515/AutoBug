@@ -39,19 +39,18 @@ void Kmeans::setGroupCount(size_t k) noexcept
 }
 
 /*******************************************
-     * @brief 进行学习,中心点的移动距离小于偏移阈值时
-     *        学习结束
-     * @param[in] threshold 偏移阈值
+     * @brief 进行学习
+     * @param[in] n 学习轮次
      * ****************************************/
-void Kmeans::learn(float threshold) noexcept
+void Kmeans::learn(int n) noexcept
 {
     if (m_dataset.size() > 100 && Accelerator::instance().available())
     {
-        m_gpuLearn(threshold);
+        m_gpuLearn(n);
     }
     else
     {
-        m_cpuLearn(threshold);
+        m_cpuLearn(n);
     }
 }
 
@@ -100,21 +99,21 @@ std::vector<Text> Kmeans::group(size_t idx) noexcept
 }
 
 /*******************************************
- * @brief 进行学习,中心点的移动距离小于偏移阈值时
- *        学习结束
- * @param[in] threshold 偏移阈值
+ * @brief 通过CPU进行学习
+ * @param[in] round 学习轮次
  * ****************************************/
-void Kmeans::m_cpuLearn(float threshold) noexcept
+void Kmeans::m_cpuLearn(int round) noexcept
 {
     int dims = m_dataset[0].dims();
 
-    // 随机选取k个样本作为初始中心点,这里直接选取前k个样本
+    // 随机选取k个样本作为初始中心点,这里这里均匀选取
+    size_t step = m_dataset.size() / m_k;
     for (size_t i = 0; i < m_k; i++)
     {
-        m_groupCenters[i] = m_dataset[i];
+        m_groupCenters[i] = m_dataset[i * step];
     }
 
-    while (true)
+    for (int n = 0; n < round; n++)
     {
         // 清空上次的分组
         for (size_t i = 0; i < m_groups.size(); i++)
@@ -139,9 +138,6 @@ void Kmeans::m_cpuLearn(float threshold) noexcept
             m_groups[groupId].push_back(s);
         }
 
-        // 标记中心点移动距离的最大值
-        float maxDelta = 0.0f;
-
         // 更新中心点的坐标为该组所有点坐标的平均值
         for (size_t group = 0; group < m_k; group++)
         {
@@ -151,41 +147,28 @@ void Kmeans::m_cpuLearn(float threshold) noexcept
                 newCenter = newCenter + m_groups[group][i];
             }
             newCenter.map([this, group](float n) -> float {return n/m_groups[group].size();});
-
-            // 计算中心点的移动距离
-            float delta = newCenter.distance(m_groupCenters[group]);
-            if (delta > maxDelta)
-            {
-                maxDelta = delta;
-            }
             m_groupCenters[group] = newCenter;
         }
-
-        // 中心点位置稳定,结束学习
-        if (maxDelta < threshold)
-            break;
     }
 }
 
 /*******************************************
- * @brief 进行学习,中心点的移动距离小于偏移阈值时
- *        学习结束
- * @param[in] threshold 偏移阈值
+ * @brief 通过GPU进行学习
+ * @param[in] round 学习轮次
  * ****************************************/
-void Kmeans::m_gpuLearn(float threshold) noexcept
+void Kmeans::m_gpuLearn(int round) noexcept
 {
-    (void)(threshold);
-
-    // 随机选取k个样本作为初始中心点,这里直接选取前k个样本
-    for (size_t i = 0; i < m_k; i++)
-    {
-        m_groupCenters[i] = m_dataset[i];
-    }
-
     auto& gpu = Accelerator::instance();
     int k = m_k;
     int dims = m_dataset[0].dims();
     int count = m_dataset.size();
+
+    // 随机选取k个样本作为初始中心点,这里这里均匀选取
+    size_t step = count / k;
+    for (size_t i = 0; i < m_k; i++)
+    {
+        m_groupCenters[i] = m_dataset[i * step];
+    }
 
     int findNearestLocalSize = gpu.localSize(count);
     int findNearestGlobalSize = gpu.globalSize(count);
@@ -221,7 +204,7 @@ void Kmeans::m_gpuLearn(float threshold) noexcept
     gpu.setArg(gpu.kernel("updatePoints"), 4, &k, sizeof(k));
     gpu.setArg(gpu.kernel("updatePoints"), 5, &count, sizeof(count));
 
-    for (int i = 0; i < 10; i++)
+    for (int n = 0; n < round; n++)
     {
         gpu.invoke(gpu.kernel("findNearest"), findNearestLocalSize, findNearestGlobalSize);
         gpu.invoke(gpu.kernel("updatePoints"), updatePointsLocalSize, updatePointsGlobalSize);
