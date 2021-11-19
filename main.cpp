@@ -25,7 +25,12 @@ public:
         {
             dataset.resize(n);
         }
-        size_t k = (dataset.size() + 4) / 5;
+        size_t preferSize = (dataset.size() / 20);
+        if (preferSize < 3)
+            preferSize = 3;
+        if (preferSize > 10)
+            preferSize = 10;
+        size_t k = (dataset.size() + 4) / preferSize;   // 初始分组数量
         Kmeans kmeans{dataset, k};
         kmeans.learn(10);
 
@@ -36,9 +41,10 @@ public:
             m_groups.push_back(group);
         }
 
+        // 数量超限，进行拆分，可能存在高度相似导致拆分失败，则跳过
         for (size_t idx = 0; idx < m_groups.size();)
         {
-            if (m_groups[idx].size() <= 10 || m_split(idx) == 1)
+            if (m_groups[idx].size() <= preferSize || m_split(idx) == 1)
             {
                 idx++;
             }
@@ -138,6 +144,6 @@ int main()
     }
     auto dataset = DataLoader::load("bug.csv", DimMap::instance());
     Classifier classifier;
-    classifier.learn(dataset, 1000);
+    classifier.learn(dataset);
     classifier.print();
 }
