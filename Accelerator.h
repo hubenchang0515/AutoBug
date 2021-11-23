@@ -70,7 +70,7 @@ public:
      * @param[in] name 核函数的名字
      * @return 核函数
      * ****************************************/
-    cl_kernel kernel(const std::string& name) const noexcept;
+    cl_kernel kernel(const std::string& name) noexcept;
 
     /*******************************************
      * @brief 获取一个缓存
@@ -122,8 +122,8 @@ public:
     /*******************************************
      * @brief 调用一个核函数
      * @param[in] kernel 运算核函数
- * @param[in] localSize 一组工作项的数量
- * @param[in] globalSize 总工作项的数量
+     * @param[in] localSize 一组工作项的数量
+     * @param[in] globalSize 总工作项的数量
      * @return 是否成功
      * ****************************************/
     bool invoke(cl_kernel kernel, size_t localSize, size_t globalSize) const noexcept;

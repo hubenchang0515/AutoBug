@@ -99,12 +99,6 @@ Accelerator::Accelerator() noexcept :
         return;
     }
 
-    // 加载kernel函数
-    for (auto& name : functions)
-    {
-        m_kernels[name] = clCreateKernel(m_program, name.c_str(), nullptr);
-    }
-
     // 读取设备名称
     size_t n = 0;
     state = clGetDeviceInfo(m_did, CL_DEVICE_NAME, 0, nullptr, &n);
@@ -120,7 +114,7 @@ Accelerator::Accelerator() noexcept :
         delete[] buffer;
     }
 
-    // 读取设备一组任务的最大工作数量
+    // 读取设备上一组任务的最大工作数量
     state = clGetDeviceInfo(m_did, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &m_maxLocalSize, nullptr);
     if (state != CL_SUCCESS)
     {
@@ -143,15 +137,6 @@ void Accelerator::setEnable(bool enable) noexcept
  * ****************************************/
 bool Accelerator::available() const noexcept
 {
-    for (auto& kernel : m_kernels)
-    {
-        if (kernel.second == nullptr)
-        {
-            printf("%s\n", kernel.first.c_str());
-            return false;
-        }
-    }
-
     return  m_enable &&
             (m_pid != nullptr) &&
             (m_did != nullptr) &&
@@ -217,7 +202,7 @@ size_t Accelerator::globalSize(size_t n) const noexcept
  * @param[in] name 核函数的名字
  * @return 核函数
  * ****************************************/
-cl_kernel Accelerator::kernel(const std::string& name) const noexcept
+cl_kernel Accelerator::kernel(const std::string& name) noexcept
 {
     try
     {
@@ -225,7 +210,11 @@ cl_kernel Accelerator::kernel(const std::string& name) const noexcept
     }
     catch (std::out_of_range&)
     {
-        return nullptr;
+        // 加载kernel函数
+        auto fn = clCreateKernel(m_program, name.c_str(), nullptr);
+        if (fn != nullptr)
+            m_kernels[name] = fn;
+        return fn;
     }
 }
 
