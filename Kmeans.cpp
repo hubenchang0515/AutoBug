@@ -173,8 +173,8 @@ void Kmeans::m_gpuLearn(int round) noexcept
     int findNearestLocalSize = gpu.localSize(count);
     int findNearestGlobalSize = gpu.globalSize(count);
 
-    int updatePointsLocalSize = gpu.localSize(count);
-    int updatePointsGlobalSize = gpu.globalSize(count);
+    int updatePointsLocalSize = gpu.localSize(k);
+    int updatePointsGlobalSize = gpu.globalSize(k);
 
     auto items = gpu.createBuffer("items", sizeof(float) * dims * count);
     auto points = gpu.createBuffer("points", sizeof(float) * dims * m_k);
