@@ -1,41 +1,32 @@
-TARGET := autobug
-LIBS := -lOpenCL
-CXXFLAGS := -W -Wall -Wextra -Werror -O3 -std=c++11
+.PHONY: all install clean
 
-PREFIX := /usr/local
-INSTALL_PATH := $(DESTDIR)$(PREFIX)
-
-SRCS := $(wildcard *.cpp) Accelerator.cpp
-HEADERS := $(wildcard *.h)
-OBJS := $(patsubst %.cpp,%.o,$(SRCS))
-
-.PHONY: prepare all clean install uninstall print profile
-
-all: $(TARGET) prepare
-
-profile: $(SRCS)
-	$(CXX) -o $(TARGET) $^ $(LIBS) -g -pg $(CXXFLAGS)
-	./$(TARGET)
-	gprof ./$(TARGET) gmon.out > profile.txt
+all: AutoBug Accelerator.cpp 
 
 install: all
-	install -m0644 $(TARGET) $(INSTALL_PATH)/bin
 
-uninstall:
-	$(RM) $(INSTALL_PATH)/bin/$(TARGET)
 
-$(TARGET): $(OBJS) 
-	$(CXX) -o $@ $^ $(LIBS)
+clean: 
+	rm -f DataLoader.o DimMap.o main.o Kmeans.o Text.o
 
-Accelerator.cpp: Accelerator.cxx kernel.cl prepare.sh
-	bash -c ./prepare.sh
 
-clean:
-	$(RM) $(OBJS) Accelerator.cpp
+AutoBug : DataLoader.o DimMap.o main.o Kmeans.o Text.o Accelerator.cpp 
+	g++ -o $@ $^ `pkg-config --libs OpenCL` 
 
-print:
-	@echo "DESTDIR : $(DESTDIR)"
-	@echo "PREFIX  : $(PREFIX)"
-	@echo "SRCS    : $(SRCS)"
-	@echo "HEADERS : $(HEADERS)"
-	@echo "OBJS    : $(OBJS)"
+DataLoader.o: DataLoader.cpp DataLoader.h DimMap.h Text.h
+	g++ -c  DataLoader.cpp -O2 -W -Wall `pkg-config --cflags OpenCL` 
+
+DimMap.o: DimMap.cpp DimMap.h
+	g++ -c  DimMap.cpp -O2 -W -Wall `pkg-config --cflags OpenCL` 
+
+main.o: main.cpp DimMap.h Text.h DataLoader.h Kmeans.h Accelerator.h
+	g++ -c  main.cpp -O2 -W -Wall `pkg-config --cflags OpenCL` 
+
+Kmeans.o: Kmeans.cpp Kmeans.h Text.h DimMap.h Accelerator.h
+	g++ -c  Kmeans.cpp -O2 -W -Wall `pkg-config --cflags OpenCL` 
+
+Text.o: Text.cpp Text.h DimMap.h
+	g++ -c  Text.cpp -O2 -W -Wall `pkg-config --cflags OpenCL` 
+
+Accelerator.cpp :  Accelerator.cxx kernel.cl prepare.sh 
+	bash -c ./prepare.sh 
+

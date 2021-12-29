@@ -1,0 +1,38 @@
+{
+    "targets": [
+        {
+            "name": "AutoBug",
+            "type": "executable",
+            "cc": "gcc",
+            "cxx": "g++",
+            "cflags": "-O2 -W -Wall",
+            "cxxflags": "-O2 -W -Wall `pkg-config --cflags OpenCL`",
+            "ar": "ar",
+            "arflags": "rcs",
+            "libs": "`pkg-config --libs OpenCL`",
+            "install": "",
+            "cmd": "",
+            "sources": [
+                "DataLoader.cpp",
+                "DimMap.cpp",
+                "main.cpp",
+                "Kmeans.cpp",
+                "Text.cpp"
+            ],
+            "depends": [
+                "Accelerator.cpp"
+            ]
+        },
+
+        {
+            "name" : "Accelerator.cpp",
+            "type" : "other",
+            "cmd": "bash -c ./prepare.sh",
+            "depends": [
+                "Accelerator.cxx",
+                "kernel.cl",
+                "prepare.sh"
+            ]
+        }
+    ]
+}
