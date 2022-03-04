@@ -20,6 +20,15 @@
                 "Text.cpp"
             ],
             "depends": [
+                "Accelerator.o"
+            ]
+        },
+        
+        {
+            "name" : "Accelerator.o",
+            "type" : "other",
+            "cmd": "g++ -c Accelerator.cpp -O2 -W -Wall",
+            "depends": [
                 "Accelerator.cpp"
             ]
         },
