@@ -12,8 +12,10 @@ $ sudo apt install ocl-icd-opencl-dev
 Intel:
 
 ```
-$ sudo apt install beignet
+$ sudo apt install intel-opencl-icd
 ```
+
+> 在较早的发行版上可以使用 beignet
 
 NVIDIA: [CUDA](https://developer.nvidia.com/cuda-downloads)   
 AMD: [ROCm](https://www.amd.com/zh-hans/graphics/servers-solutions-rocm)  
